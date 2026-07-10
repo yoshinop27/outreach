@@ -1,0 +1,131 @@
+// Outreach Dashboard — MVP schema
+//
+// SQLite doesn't support native enum columns, so fields that are enums in the
+// spec (role, status, jobType, emailStatus, channel, contact status, outcome)
+// are stored as String here and validated against a fixed set of values in
+// application code (see src/lib/types.ts). Swapping to Postgres later, the
+// same String columns can become real Postgres enums without changing the
+// application layer.
+//
+// Similarly, array columns (target_titles, seniority) are stored as
+// JSON-encoded strings and (de)serialized in src/lib/types.ts.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                      String    @id @default(cuid())
+  entraObjectId           String?   @unique
+  email                   String    @unique
+  displayName             String?
+  role                    String    @default("user") // user | admin
+  status                  String    @default("invited") // active | disabled | invited
+  invitedByUserId         String?
+  invitedBy               User?     @relation("Invites", fields: [invitedByUserId], references: [id])
+  invitedUsers            User[]    @relation("Invites")
+  outlookAccountConnected Boolean   @default(false)
+  dailySendCapCurrent     Int       @default(20)
+  apolloApiKey            String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  lastLoginAt             DateTime?
+
+  watchlistItems WatchlistItem[]
+  templates      Template[]
+}
+
+model WatchlistItem {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName   String
+  companyDomain String?
+  targetTitles  String // JSON string[]
+  location      String?
+  jobType       String   @default("full_time") // full_time | contract | internship
+  seniority     String? // JSON string[]
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  contacts Contact[]
+
+  @@index([userId])
+}
+
+model Contact {
+  id                 String   @id @default(cuid())
+  watchlistItemId    String
+  watchlistItem      WatchlistItem @relation(fields: [watchlistItemId], references: [id], onDelete: Cascade)
+  fullName           String
+  title              String?
+  companyName        String
+  linkedinUrl        String?
+  email              String?
+  emailStatus        String   @default("not_found") // verified | guessed | not_found
+  source             String   @default("apollo")
+  discoveredAt       DateTime @default(now())
+  status             String   @default("discovered")
+  // discovered | queued_email | queued_linkedin | emailed | linkedin_manual_pending
+  // | replied | meeting_booked | closed_no_response | closed_declined
+  lastStatusChangeAt DateTime @default(now())
+
+  outreachEvents OutreachEvent[]
+  coffeeChats    CoffeeChat[]
+
+  @@index([watchlistItemId])
+}
+
+model Template {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel   String // email | linkedin
+  name      String
+  subject   String?
+  body      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  outreachEvents OutreachEvent[]
+
+  @@index([userId])
+}
+
+model OutreachEvent {
+  id                      String    @id @default(cuid())
+  contactId               String
+  contact                 Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  templateId              String?
+  template                Template? @relation(fields: [templateId], references: [id])
+  channel                 String // email | linkedin
+  sentAt                  DateTime?
+  openedAt                DateTime?
+  repliedAt               DateTime?
+  bounced                 Boolean   @default(false)
+  manualActionCompletedAt DateTime?
+  createdAt               DateTime  @default(now())
+
+  @@index([contactId])
+}
+
+model CoffeeChat {
+  id              String   @id @default(cuid())
+  contactId       String
+  contact         Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  scheduledAt     DateTime
+  durationMinutes Int      @default(30)
+  calendarEventId String?
+  notes           String?
+  outcome         String? // completed | no_show | rescheduled | cancelled
+  createdAt       DateTime @default(now())
+
+  @@index([contactId])
+}
