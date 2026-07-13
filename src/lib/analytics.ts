@@ -112,7 +112,7 @@ export async function getAnalytics(userId: string, days: number): Promise<Analyt
     replyRate,
     bounceRate,
     openRateNote:
-      "Not tracked — Microsoft Graph doesn't report opens natively without a tracking pixel (see spec Section 11).",
+      "Not tracked — Gmail doesn't report opens natively without a tracking pixel (see spec Section 11).",
     funnel,
     byCompany: Array.from(byCompany.entries()).map(([company, count]) => ({ company, count })),
     templateStats,

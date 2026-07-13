@@ -21,7 +21,7 @@ datasource db {
 
 model User {
   id                      String    @id @default(cuid())
-  entraObjectId           String?   @unique
+  googleSubjectId           String?   @unique
   email                   String    @unique
   displayName             String?
   role                    String    @default("user") // user | admin
@@ -29,7 +29,7 @@ model User {
   invitedByUserId         String?
   invitedBy               User?     @relation("Invites", fields: [invitedByUserId], references: [id])
   invitedUsers            User[]    @relation("Invites")
-  outlookAccountConnected Boolean   @default(false)
+  googleAccountConnected Boolean   @default(false)
   dailySendCapCurrent     Int       @default(20)
   apolloApiKey            String?
   createdAt               DateTime  @default(now())

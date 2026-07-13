@@ -1,5 +1,5 @@
 import type { NextAuthOptions, Profile } from "next-auth";
-import AzureADProvider from "next-auth/providers/azure-ad";
+import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
 import type { UserRole, UserStatus } from "@/lib/types";
@@ -16,7 +16,7 @@ export function normalizeEmail(email: string): string {
  */
 async function syncUserOnSignIn(
   email: string,
-  entraObjectId?: string | null,
+  googleSubjectId?: string | null,
 ): Promise<{ id: string; role: UserRole; status: UserStatus } | null> {
   const existing = await prisma.user.findUnique({ where: { email: normalizeEmail(email) } });
   if (!existing) return null;
@@ -27,7 +27,7 @@ async function syncUserOnSignIn(
     data: {
       status: existing.status === "invited" ? "active" : existing.status,
       lastLoginAt: new Date(),
-      ...(entraObjectId ? { entraObjectId } : {}),
+      ...(googleSubjectId ? { googleSubjectId } : {}),
     },
   });
 
@@ -36,25 +36,21 @@ async function syncUserOnSignIn(
 
 const providers: NextAuthOptions["providers"] = [];
 
-const hasAzureAdConfig =
-  !!process.env.AZURE_AD_CLIENT_ID &&
-  !!process.env.AZURE_AD_CLIENT_SECRET &&
-  !!process.env.AZURE_AD_TENANT_ID;
+const hasGoogleConfig = !!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET;
 
-if (hasAzureAdConfig) {
+if (hasGoogleConfig) {
   providers.push(
-    AzureADProvider({
-      clientId: process.env.AZURE_AD_CLIENT_ID!,
-      clientSecret: process.env.AZURE_AD_CLIENT_SECRET!,
-      tenantId: process.env.AZURE_AD_TENANT_ID!,
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
   );
 }
 
 // Local-development-only escape hatch so the rest of the app can be built and
-// tested without a real Azure AD app registration. Real login still goes
-// through Entra ID above; this just bypasses OAuth for whichever seeded user
-// you type in, and only exists when explicitly enabled.
+// tested without a real Google OAuth client. Real login still goes through
+// Google above; this just bypasses OAuth for whichever seeded user you type
+// in, and only exists when explicitly enabled.
 if (process.env.ENABLE_DEV_LOGIN === "true") {
   providers.push(
     CredentialsProvider({
@@ -85,11 +81,11 @@ export const authOptions: NextAuthOptions = {
     async signIn({ user, account, profile }) {
       if (!account) return false;
 
-      if (account.provider === "azure-ad") {
-        const azureProfile = profile as (Profile & { oid?: string }) | undefined;
-        const email = user.email ?? azureProfile?.email;
+      if (account.provider === "google") {
+        const googleProfile = profile as (Profile & { sub?: string }) | undefined;
+        const email = user.email ?? googleProfile?.email;
         if (!email) return false;
-        const synced = await syncUserOnSignIn(email, azureProfile?.oid ?? account.providerAccountId);
+        const synced = await syncUserOnSignIn(email, googleProfile?.sub ?? account.providerAccountId);
         return synced !== null;
       }
 

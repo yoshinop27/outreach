@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireSessionUser } from "@/lib/session";
 import { apiErrorResponse, NotFoundError } from "@/lib/api-helpers";
 
-// Demo-only stand-in for the Microsoft Graph mail change notification that
+// Demo-only stand-in for the Gmail push notification (watch/history) that
 // would normally detect a reply (spec 6.3). Lets you exercise the Reply
 // Inbox / triage flow locally without a real connected mailbox.
 export async function POST(_req: Request, { params }: { params: { id: string } }) {

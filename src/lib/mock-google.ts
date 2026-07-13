@@ -1,8 +1,9 @@
-// Stand-in for Microsoft Graph `Mail.Send` and `Calendars.ReadWrite` (see
-// spec Section 4, items 5 and 7). Real integration would call the Graph SDK
-// using the user's connected Outlook OAuth token; these functions keep the
-// same call shape so the rest of the app (outreach dispatch, coffee-chat
-// scheduling) doesn't need to change when that's wired up.
+// Stand-in for the Gmail API (`users.messages.send`) and Google Calendar API
+// (`events.insert`) (see spec Section 4, items 5 and 7). Real integration
+// would call the Google APIs using the user's connected Google OAuth token;
+// these functions keep the same call shape so the rest of the app (outreach
+// dispatch, coffee-chat scheduling) doesn't need to change when that's wired
+// up.
 
 export interface MockSendEmailResult {
   sentAt: Date;

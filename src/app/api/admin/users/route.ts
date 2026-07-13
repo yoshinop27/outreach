@@ -18,7 +18,7 @@ export async function GET() {
         role: true,
         status: true,
         dailySendCapCurrent: true,
-        outlookAccountConnected: true,
+        googleAccountConnected: true,
         createdAt: true,
         lastLoginAt: true,
         _count: { select: { watchlistItems: true } },

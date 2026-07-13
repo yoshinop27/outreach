@@ -91,7 +91,7 @@ export function CalendarClient({
         <h1 className="text-2xl font-semibold text-slate-900">Calendar</h1>
         <p className="mt-1 text-sm text-slate-500">
           Manual scheduling — you pick the time, no availability matching. In a real deployment this also
-          creates an Outlook event via Microsoft Graph; here it's simulated.
+          creates a Google Calendar event; here it's simulated.
         </p>
       </div>
 

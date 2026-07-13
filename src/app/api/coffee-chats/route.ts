@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireSessionUser } from "@/lib/session";
 import { apiErrorResponse, NotFoundError } from "@/lib/api-helpers";
-import { mockCreateCalendarEvent } from "@/lib/mock-graph";
+import { mockCreateCalendarEvent } from "@/lib/mock-google";
 
 export async function GET() {
   try {

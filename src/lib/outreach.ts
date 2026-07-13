@@ -6,7 +6,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { discoverContacts } from "@/lib/mock-apollo";
-import { mockSendEmail } from "@/lib/mock-graph";
+import { mockSendEmail } from "@/lib/mock-google";
 import { parseStringArray, renderTemplate, type ContactStatus } from "@/lib/types";
 
 // Independent of whichever cap mode is active (manual now, adaptive later —

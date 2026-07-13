@@ -11,11 +11,11 @@ interface DevUser {
 }
 
 export function LoginClient({
-  hasAzureAdConfig,
+  hasGoogleConfig,
   devUsers,
   errorMessage,
 }: {
-  hasAzureAdConfig: boolean;
+  hasGoogleConfig: boolean;
   devUsers: DevUser[];
   errorMessage: string | null;
 }) {
@@ -35,7 +35,7 @@ export function LoginClient({
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Outreach Dashboard</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Invite-only. Sign in with the Microsoft account your admin invited.
+            Invite-only. Sign in with the Google account your admin invited.
           </p>
         </div>
 
@@ -46,15 +46,15 @@ export function LoginClient({
         )}
 
         <button
-          onClick={() => signIn("azure-ad", { callbackUrl: "/dashboard" })}
-          disabled={!hasAzureAdConfig}
+          onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
+          disabled={!hasGoogleConfig}
           className="flex w-full items-center justify-center gap-2 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          Sign in with Microsoft
+          Sign in with Google
         </button>
-        {!hasAzureAdConfig && (
+        {!hasGoogleConfig && (
           <p className="text-xs text-slate-400">
-            Azure AD isn&apos;t configured yet. Set AZURE_AD_CLIENT_ID / SECRET / TENANT_ID in
+            Google sign-in isn&apos;t configured yet. Set GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET in
             .env to enable this (see README).
           </p>
         )}

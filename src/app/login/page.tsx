@@ -6,7 +6,7 @@ import { LoginClient } from "./LoginClient";
 const ERROR_MESSAGES: Record<string, string> = {
   AccessDenied:
     "That account hasn't been invited (or has been disabled). Ask an admin to invite you first.",
-  Configuration: "Sign-in isn't configured correctly. Check the server's Azure AD env vars.",
+  Configuration: "Sign-in isn't configured correctly. Check the server's Google OAuth env vars.",
 };
 
 export default async function LoginPage({
@@ -17,10 +17,7 @@ export default async function LoginPage({
   const session = await getSession();
   if (session?.user) redirect("/dashboard");
 
-  const hasAzureAdConfig =
-    !!process.env.AZURE_AD_CLIENT_ID &&
-    !!process.env.AZURE_AD_CLIENT_SECRET &&
-    !!process.env.AZURE_AD_TENANT_ID;
+  const hasGoogleConfig = !!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET;
 
   const devLoginEnabled = process.env.ENABLE_DEV_LOGIN === "true";
   const devUsers = devLoginEnabled
@@ -35,6 +32,6 @@ export default async function LoginPage({
     : null;
 
   return (
-    <LoginClient hasAzureAdConfig={hasAzureAdConfig} devUsers={devUsers} errorMessage={errorMessage} />
+    <LoginClient hasGoogleConfig={hasGoogleConfig} devUsers={devUsers} errorMessage={errorMessage} />
   );
 }

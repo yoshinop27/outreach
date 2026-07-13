@@ -11,10 +11,10 @@ credentials/accounts this build doesn't assume you have yet:
 
 | Piece | This build | Real spec version |
 |---|---|---|
-| **Login** | Real Microsoft Entra ID (Azure AD) via NextAuth, invite-only | Same |
+| **Login** | Real Google OAuth via NextAuth, invite-only | Same |
 | **Contact discovery** | `src/lib/mock-apollo.ts` generates plausible fake contacts | Apollo.io People Search API |
-| **Email send / reply detection** | `src/lib/mock-graph.ts` simulates sending, logs an `OutreachEvent` | Microsoft Graph `Mail.Send` + change notifications |
-| **Calendar** | Same mock file simulates creating an event | Microsoft Graph `Calendars.ReadWrite` |
+| **Email send / reply detection** | `src/lib/mock-google.ts` simulates sending, logs an `OutreachEvent` | Gmail API send + push notifications |
+| **Calendar** | Same mock file simulates creating an event | Google Calendar API |
 | **Discovery + dispatch trigger** | Manual "Run discovery" button | Scheduled cron/queue job (same underlying function, `src/lib/outreach.ts`) |
 
 Every mocked piece is isolated behind a small function with the same shape a
@@ -40,51 +40,119 @@ Generate a real `NEXTAUTH_SECRET`:
 openssl rand -base64 32
 ```
 
-### Logging in without Azure AD (dev login)
+### Logging in without Google OAuth (dev login)
 
 With `ENABLE_DEV_LOGIN="true"` in `.env` (the default), the login page shows
 a "Dev Login" panel that signs you in as any seeded user by email — no OAuth
 required. This is gated to local development only; never enable it in a
 deployed environment. Use it to explore the app immediately.
 
-### Setting up real Entra ID login
+### Setting up real Google login
 
-1. In the [Azure Portal](https://portal.azure.com), go to **Microsoft Entra
-   ID → App registrations → New registration**.
-2. Name it (e.g. "Outreach Dashboard"), leave account type as your default,
-   and set the redirect URI to **Web**:
-   `http://localhost:3000/api/auth/callback/azure-ad`
-3. After creation, copy the **Application (client) ID** and **Directory
-   (tenant) ID** from the Overview page.
-4. Go to **Certificates & secrets → New client secret**, create one, and
-   copy its value immediately (it's only shown once).
+1. In the [Google Cloud Console](https://console.cloud.google.com), create
+   (or pick) a project, then go to **APIs & Services → OAuth consent
+   screen** and configure it (Internal if you're on Google Workspace and
+   want to restrict to your org, External + Testing otherwise).
+2. Go to **APIs & Services → Credentials → Create Credentials → OAuth
+   client ID**, application type **Web application**.
+3. Add an authorized redirect URI:
+   `http://localhost:3000/api/auth/callback/google`
+4. After creation, copy the **Client ID** and **Client secret**.
 5. Put these into `.env`:
    ```
-   AZURE_AD_CLIENT_ID="<application client id>"
-   AZURE_AD_CLIENT_SECRET="<client secret value>"
-   AZURE_AD_TENANT_ID="<directory tenant id>"
+   GOOGLE_CLIENT_ID="<client id>"
+   GOOGLE_CLIENT_SECRET="<client secret>"
    ```
-6. Restart `npm run dev`. The "Sign in with Microsoft" button on `/login`
-   will now be enabled.
+6. Restart `npm run dev`. The "Sign in with Google" button on `/login` will
+   now be enabled.
 7. **Invite-only**: signing in only succeeds for emails an admin has already
    invited (see the Admin panel) — anyone else gets an `AccessDenied` error
    by design (spec Section 2: "Invite-only: accounts are created by an
    admin, not open self-signup"). Make sure `ADMIN_EMAIL` in `.env` matches
-   the Microsoft account you'll sign in with first, since the seed script
+   the Google account you'll sign in with first, since the seed script
    grants that email an active admin account.
-8. This build only requests default OpenID Connect scopes (login only). Add
-   `Mail.Send` and `Calendars.ReadWrite` delegated permissions to the app
-   registration when you wire up real Graph calls in `src/lib/mock-graph.ts`.
+8. This build only requests default OpenID Connect scopes (login only) — no
+   extra setup is needed to make login itself work. To send real mail and
+   create real calendar events, see "Wiring up the mocked APIs" below.
+
+## Wiring up the mocked APIs
+
+Two pieces are mocked and need their own account/credentials before this is
+a real, working outreach tool. Neither is required to run or demo the app —
+only to make discovery and outreach actually hit the outside world.
+
+### Apollo.io (contact discovery — `src/lib/mock-apollo.ts`)
+
+1. Sign up at [apollo.io](https://www.apollo.io) and pick a plan with **API
+   access** to People Search — the free tier does not include API access,
+   so you need a paid plan.
+2. Get an API key: **Settings → Integrations → API**.
+3. Add it to `.env`, e.g. `APOLLO_API_KEY="<key>"` (there's no entry for
+   this in `.env.example` yet — add one when you wire it up).
+4. Rewrite `discoverContacts` in `src/lib/mock-apollo.ts` to call Apollo's
+   People Search endpoint (`POST https://api.apollo.io/v1/mixed_people/search`
+   with `organization_domains`, `person_titles`, and your API key) instead
+   of generating fake data, mapping the response into the same
+   `MockDiscoveredContact` shape callers already expect. There's no official
+   Node SDK — plain `fetch` is enough.
+5. Note: Apollo's People Search only returns verified emails when you
+   consume enrichment credits per contact, which are metered by plan — this
+   affects how big a "Run discovery" batch you can afford to run.
+
+### Gmail + Google Calendar (email + calendar — `src/lib/mock-google.ts`)
+
+This is more involved than Apollo because email/calendar actions happen
+*as the signed-in user* (delegated OAuth scopes), not with a single app-wide
+API key — so it builds on the Google OAuth client above rather than being a
+separate account.
+
+1. In the same Google Cloud project used for login, go to **APIs & Services
+   → Library** and enable the **Gmail API** and **Google Calendar API**.
+2. If your OAuth consent screen uses restricted/sensitive scopes (Gmail send
+   scopes are considered sensitive), you'll need to add the scopes on the
+   **OAuth consent screen → Scopes** page, and — for an External app used
+   outside a Google Workspace org — submit it for **verification** before
+   it can be used by anyone besides the test users you've explicitly added.
+   Internal (Workspace-only) apps skip verification.
+3. Update the `GoogleProvider` config in `src/lib/auth.ts` to actually
+   request those scopes at sign-in, e.g.:
+   ```ts
+   authorization: {
+     params: {
+       scope:
+         "openid profile email " +
+         "https://www.googleapis.com/auth/gmail.send " +
+         "https://www.googleapis.com/auth/calendar.events",
+       access_type: "offline",
+       prompt: "consent",
+     },
+   }
+   ```
+   (`access_type: "offline"` is what gets you a refresh token — Google only
+   returns one on the *first* consent, hence `prompt: "consent"` to force it.)
+4. Capture and persist the OAuth access token and refresh token that
+   NextAuth receives in the `jwt` callback's `account` param — Gmail/
+   Calendar calls need a valid per-user bearer token, and Google access
+   tokens expire in about an hour, so you'll need to refresh them (via the
+   refresh token) rather than just store the first one.
+5. Add `googleapis` (Google's official Node client) and call
+   `gmail.users.messages.send` and `calendar.events.insert` using that
+   per-user token, in place of the fake logic in `mockSendEmail` and
+   `mockCreateCalendarEvent`.
+6. Reply detection (the "Real spec version" of email in the table above)
+   needs Gmail push notifications (a `users.watch` subscription via Google
+   Cloud Pub/Sub) — out of scope for a first pass; the **Simulate reply**
+   button in Pipeline stands in for this until it's built.
 
 ## Project layout
 
 ```
 prisma/schema.prisma       Data model (see header comment on SQLite enum handling)
 prisma/seed.ts             Seeds an admin user + sample watchlist/templates
-src/lib/auth.ts            NextAuth config: Entra ID + dev-login providers, invite-only gate
+src/lib/auth.ts            NextAuth config: Google + dev-login providers, invite-only gate
 src/lib/outreach.ts        Discovery + dispatch logic (caps, dedupe, template rendering)
 src/lib/mock-apollo.ts     Fake contact generator — swap for a real Apollo.io call
-src/lib/mock-graph.ts      Fake email/calendar actions — swap for real Microsoft Graph calls
+src/lib/mock-google.ts     Fake email/calendar actions — swap for real Gmail/Calendar API calls
 src/lib/analytics.ts       Shared analytics query, used by both the API route and SSR pages
 src/app/api/**             REST endpoints, all scoped to the signed-in user (except /admin/**)
 src/app/dashboard/**       The actual UI: watchlist, pipeline, action queue, inbox,
@@ -93,7 +161,7 @@ src/app/dashboard/**       The actual UI: watchlist, pipeline, action queue, inb
 
 ## Everyday usage
 
-1. Sign in (dev login or Entra ID).
+1. Sign in (dev login or Google).
 2. **Watchlist** → add a company + target titles/location. Click **Run
    discovery for all active** to generate contacts (mocked Apollo) and
    dispatch outreach against your active templates and daily/per-company
@@ -105,7 +173,7 @@ src/app/dashboard/**       The actual UI: watchlist, pipeline, action queue, inb
    actually done it by hand.
 5. Since there's no real inbox connected, contacts you emailed have a
    **Simulate reply** button on the Pipeline board — a stand-in for the
-   Microsoft Graph mail-change notification the real system would use.
+   Gmail push notification the real system would use.
 6. Replies land in **Reply Inbox** for manual triage (meeting booked / not
    interested / no response).
 7. **Calendar** lets you manually schedule a coffee chat for any replied
@@ -138,6 +206,6 @@ src/app/dashboard/**       The actual UI: watchlist, pipeline, action queue, inb
   cap adjustment isn't built — `dailySendCapCurrent` is only ever
   manually/admin-set, which matches the spec's own Phase 1–3 scope.
 - **"Opened" isn't tracked.** As the spec's own Section 11 open question
-  flags, Microsoft Graph doesn't report opens without a tracking pixel.
-  Analytics shows reply rate and bounce rate; open rate is displayed as "—"
-  with a note rather than a fabricated number.
+  flags, Gmail doesn't report opens without a tracking pixel. Analytics
+  shows reply rate and bounce rate; open rate is displayed as "—" with a
+  note rather than a fabricated number.

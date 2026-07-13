@@ -98,7 +98,7 @@ export function PipelineClient({ initialContacts }: { initialContacts: ContactVi
                         onClick={() => simulateReply(c.id)}
                         disabled={busyId === c.id}
                         className="text-xs font-medium text-violet-600 hover:underline"
-                        title="Demo helper standing in for a real Microsoft Graph reply notification"
+                        title="Demo helper standing in for a real Gmail reply notification"
                       >
                         Simulate reply
                       </button>

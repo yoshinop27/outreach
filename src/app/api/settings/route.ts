@@ -14,7 +14,7 @@ export async function GET() {
         displayName: user.displayName,
         dailySendCapCurrent: user.dailySendCapCurrent,
         apolloApiKey: user.apolloApiKey,
-        outlookAccountConnected: user.outlookAccountConnected,
+        googleAccountConnected: user.googleAccountConnected,
       },
     });
   } catch (err) {
@@ -25,7 +25,7 @@ export async function GET() {
 const updateSchema = z.object({
   dailySendCapCurrent: z.number().int().min(0).max(500).optional(),
   apolloApiKey: z.string().optional().nullable(),
-  outlookAccountConnected: z.boolean().optional(),
+  googleAccountConnected: z.boolean().optional(),
 });
 
 export async function PATCH(req: Request) {
@@ -42,7 +42,7 @@ export async function PATCH(req: Request) {
         displayName: user.displayName,
         dailySendCapCurrent: user.dailySendCapCurrent,
         apolloApiKey: user.apolloApiKey,
-        outlookAccountConnected: user.outlookAccountConnected,
+        googleAccountConnected: user.googleAccountConnected,
       },
     });
   } catch (err) {

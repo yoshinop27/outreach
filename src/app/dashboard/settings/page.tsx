@@ -13,7 +13,7 @@ export default async function SettingsPage() {
         displayName: user.displayName,
         dailySendCapCurrent: user.dailySendCapCurrent,
         apolloApiKey: user.apolloApiKey,
-        outlookAccountConnected: user.outlookAccountConnected,
+        googleAccountConnected: user.googleAccountConnected,
       }}
     />
   );

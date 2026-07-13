@@ -8,13 +8,13 @@ interface SettingsData {
   displayName: string | null;
   dailySendCapCurrent: number;
   apolloApiKey: string | null;
-  outlookAccountConnected: boolean;
+  googleAccountConnected: boolean;
 }
 
 export function SettingsClient({ initial }: { initial: SettingsData }) {
   const [cap, setCap] = useState(initial.dailySendCapCurrent);
   const [apolloKey, setApolloKey] = useState(initial.apolloApiKey ?? "");
-  const [outlookConnected, setOutlookConnected] = useState(initial.outlookAccountConnected);
+  const [googleConnected, setGoogleConnected] = useState(initial.googleAccountConnected);
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -32,10 +32,10 @@ export function SettingsClient({ initial }: { initial: SettingsData }) {
     }
   }
 
-  async function toggleOutlook() {
-    const next = !outlookConnected;
-    setOutlookConnected(next);
-    await apiFetch("/api/settings", { method: "PATCH", body: JSON.stringify({ outlookAccountConnected: next }) });
+  async function toggleGoogle() {
+    const next = !googleConnected;
+    setGoogleConnected(next);
+    await apiFetch("/api/settings", { method: "PATCH", body: JSON.stringify({ googleAccountConnected: next }) });
   }
 
   return (
@@ -81,20 +81,20 @@ export function SettingsClient({ initial }: { initial: SettingsData }) {
 
         <div className="flex items-center justify-between">
           <div>
-            <label className="block text-sm font-medium text-slate-700">Outlook / Microsoft 365</label>
+            <label className="block text-sm font-medium text-slate-700">Google Workspace</label>
             <p className="text-xs text-slate-400">
-              Mocked connection status — real Mail.Send / Calendars.ReadWrite scopes aren&apos;t requested yet.
+              Mocked connection status — real Gmail / Calendar scopes aren&apos;t requested yet.
             </p>
           </div>
           <button
-            onClick={toggleOutlook}
+            onClick={toggleGoogle}
             className={
-              outlookConnected
+              googleConnected
                 ? "rounded-md bg-emerald-100 px-3 py-1.5 text-xs font-medium text-emerald-700"
                 : "rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
             }
           >
-            {outlookConnected ? "Connected" : "Connect"}
+            {googleConnected ? "Connected" : "Connect"}
           </button>
         </div>
 
