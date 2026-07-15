@@ -4,7 +4,7 @@ import { serializeStringArray } from "../src/lib/types";
 const prisma = new PrismaClient();
 
 async function main() {
-  const adminEmail = process.env.ADMIN_EMAIL ?? "you@example.com";
+  const adminEmail = process.env.ADMIN_EMAIL;
 
   const admin = await prisma.user.upsert({
     where: { email: adminEmail },

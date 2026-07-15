@@ -1,14 +1,4 @@
 // Outreach Dashboard — MVP schema
-//
-// SQLite doesn't support native enum columns, so fields that are enums in the
-// spec (role, status, jobType, emailStatus, channel, contact status, outcome)
-// are stored as String here and validated against a fixed set of values in
-// application code (see src/lib/types.ts). Swapping to Postgres later, the
-// same String columns can become real Postgres enums without changing the
-// application layer.
-//
-// Similarly, array columns (target_titles, seniority) are stored as
-// JSON-encoded strings and (de)serialized in src/lib/types.ts.
 
 generator client {
   provider = "prisma-client-js"
@@ -59,7 +49,6 @@ model WatchlistItem {
   updatedAt     DateTime @updatedAt
 
   contacts Contact[]
-
   @@index([userId])
 }
 
@@ -99,7 +88,7 @@ model Template {
   updatedAt DateTime @updatedAt
 
   outreachEvents OutreachEvent[]
-
+  
   @@index([userId])
 }
 

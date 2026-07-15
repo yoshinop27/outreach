@@ -159,53 +159,5 @@ src/app/dashboard/**       The actual UI: watchlist, pipeline, action queue, inb
                            templates, calendar, analytics, settings, admin
 ```
 
-## Everyday usage
 
-1. Sign in (dev login or Google).
-2. **Watchlist** → add a company + target titles/location. Click **Run
-   discovery for all active** to generate contacts (mocked Apollo) and
-   dispatch outreach against your active templates and daily/per-company
-   caps.
-3. **Pipeline** shows every contact on a kanban board; you can also manually
-   override any contact's status here.
-4. **Action Queue** is the LinkedIn fallback — copy the pre-filled note,
-   open the (fake) LinkedIn profile, and click "Mark sent" once you've
-   actually done it by hand.
-5. Since there's no real inbox connected, contacts you emailed have a
-   **Simulate reply** button on the Pipeline board — a stand-in for the
-   Gmail push notification the real system would use.
-6. Replies land in **Reply Inbox** for manual triage (meeting booked / not
-   interested / no response).
-7. **Calendar** lets you manually schedule a coffee chat for any replied
-   contact.
-8. **Analytics** rolls all of this up over 7/30/90-day windows.
-9. **Admin** (only visible to admin-role users) invites new users by email
-   and manages daily send caps / disabling accounts.
 
-## Deviations from the spec (and why)
-
-- **REST, not GraphQL.** The spec suggests a GraphQL API; this build uses
-  plain Next.js route handlers to keep the MVP's moving parts down. The
-  per-user scoping and resolver-level enforcement the spec calls for is
-  still there — it's just done in REST handlers instead of GraphQL
-  resolvers.
-- **SQLite, not Postgres.** Zero setup, single file, no external service to
-  install. The schema mirrors the spec's tables field-for-field; the header
-  comment in `prisma/schema.prisma` explains the two places SQLite's lack of
-  enum/array types required a workaround (stored as validated strings/JSON,
-  see `src/lib/types.ts`). Postgres row-level security from the spec isn't
-  applicable to SQLite — scoping is enforced in the API layer instead
-  (every query filters by the signed-in `user_id`).
-- **Manual trigger, not a scheduled worker.** Discovery + dispatch run when
-  you click a button rather than on a cron. The function they call
-  (`runDiscoveryAndDispatch` in `src/lib/outreach.ts`) is exactly what a
-  scheduled job would call per watchlist item — wire up a cron (e.g.
-  Vercel Cron, or a `node-cron`/BullMQ worker) calling that function to get
-  the spec's actual Phase 1 behavior.
-- **No adaptive send volume.** Spec Section 6.2/Phase 4's reply-rate-driven
-  cap adjustment isn't built — `dailySendCapCurrent` is only ever
-  manually/admin-set, which matches the spec's own Phase 1–3 scope.
-- **"Opened" isn't tracked.** As the spec's own Section 11 open question
-  flags, Gmail doesn't report opens without a tracking pixel. Analytics
-  shows reply rate and bounce rate; open rate is displayed as "—" with a
-  note rather than a fabricated number.
