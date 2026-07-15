@@ -14,7 +14,6 @@ interface SettingsData {
 export function SettingsClient({ initial }: { initial: SettingsData }) {
   const [cap, setCap] = useState(initial.dailySendCapCurrent);
   const [apolloKey, setApolloKey] = useState(initial.apolloApiKey ?? "");
-  const [googleConnected, setGoogleConnected] = useState(initial.googleAccountConnected);
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -30,12 +29,6 @@ export function SettingsClient({ initial }: { initial: SettingsData }) {
     } finally {
       setBusy(false);
     }
-  }
-
-  async function toggleGoogle() {
-    const next = !googleConnected;
-    setGoogleConnected(next);
-    await apiFetch("/api/settings", { method: "PATCH", body: JSON.stringify({ googleAccountConnected: next }) });
   }
 
   return (
@@ -83,19 +76,18 @@ export function SettingsClient({ initial }: { initial: SettingsData }) {
           <div>
             <label className="block text-sm font-medium text-slate-700">Google Workspace</label>
             <p className="text-xs text-slate-400">
-              Mocked connection status — real Gmail / Calendar scopes aren&apos;t requested yet.
+              Gmail send uses your real Google OAuth connection. Re-auth with Google if this shows not connected.
             </p>
           </div>
-          <button
-            onClick={toggleGoogle}
+          <span
             className={
-              googleConnected
+              initial.googleAccountConnected
                 ? "rounded-md bg-emerald-100 px-3 py-1.5 text-xs font-medium text-emerald-700"
-                : "rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                : "rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700"
             }
           >
-            {googleConnected ? "Connected" : "Connect"}
-          </button>
+            {initial.googleAccountConnected ? "Connected" : "Not connected"}
+          </span>
         </div>
 
         <div className="flex items-center gap-3 pt-2">

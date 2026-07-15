@@ -43,6 +43,13 @@ if (hasGoogleConfig) {
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      authorization: {
+        params: {
+          scope: "openid profile email https://www.googleapis.com/auth/gmail.send",
+          access_type: "offline",
+          prompt: "consent",
+        },
+      },
     }),
   );
 }
@@ -86,6 +93,20 @@ export const authOptions: NextAuthOptions = {
         const email = user.email ?? googleProfile?.email;
         if (!email) return false;
         const synced = await syncUserOnSignIn(email, googleProfile?.sub ?? account.providerAccountId);
+        if (!synced) return false;
+
+        const expiresAt =
+          typeof account.expires_at === "number" ? new Date(account.expires_at * 1000) : null;
+        await prisma.user.update({
+          where: { id: synced.id },
+          data: {
+            googleAccountConnected: true,
+            googleAccessToken: account.access_token ?? null,
+            googleRefreshToken: account.refresh_token ?? undefined,
+            googleTokenExpiresAt: expiresAt,
+            googleScope: account.scope ?? null,
+          },
+        });
         return synced !== null;
       }
 

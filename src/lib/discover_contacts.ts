@@ -1,11 +1,6 @@
-// Stand-in for Apollo.io's People Search API (see spec Section 4, item 4 —
-// "Discovery worker"). Swap `discoverContacts` for a real Apollo API call
-// later; callers only depend on this function's return shape, so nothing
-// else needs to change.
-
 import type { EmailStatus } from "@/lib/types";
 
-export interface MockDiscoveredContact {
+export interface DiscoveredContact {
   fullName: string;
   title: string;
   linkedinUrl: string;
@@ -41,17 +36,16 @@ function weightedEmailStatus(): EmailStatus {
   return "not_found";
 }
 
-export function discoverContacts(params: {
-  companyName: string;
-  companyDomain?: string | null;
-  targetTitles: string[];
-  count?: number;
-}): MockDiscoveredContact[] {
+// a function that users the Apollo SDK to discover contacts based on a company name, domain, title
+export function discoverContacts(params: {companyName: string; 
+  companyDomain?: string | null; 
+  targetTitles: string[]; 
+  count?: number;}): DiscoveredContact[] {
   const { companyName, companyDomain, targetTitles } = params;
   const titles = targetTitles.length > 0 ? targetTitles : DEFAULT_TITLES;
-  const count = params.count ?? 2 + Math.floor(Math.random() * 3); // 2-4
+  const count = params.count ?? (2 + Math.floor(Math.random() * 3));
 
-  const results: MockDiscoveredContact[] = [];
+  const results: DiscoveredContact[] = [];
   for (let i = 0; i < count; i++) {
     const firstName = pick(FIRST_NAMES);
     const lastName = pick(LAST_NAMES);

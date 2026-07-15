@@ -5,7 +5,7 @@
 // change, only the trigger does.
 
 import { prisma } from "@/lib/prisma";
-import { discoverContacts } from "@/lib/mock-apollo";
+import { discoverContacts } from "@/lib/discover_contacts";
 import { mockSendEmail } from "@/lib/mock-google";
 import { parseStringArray, renderTemplate, type ContactStatus } from "@/lib/types";
 
@@ -154,6 +154,7 @@ export async function runDiscoveryAndDispatch(
       const subject = renderTemplate(emailTemplate.subject ?? "", ctx);
       const body = renderTemplate(emailTemplate.body, ctx);
       const result = await mockSendEmail({
+        userId: user.id,
         fromUserEmail: user.email,
         to: contact.email!,
         subject,

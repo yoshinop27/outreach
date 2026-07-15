@@ -30,6 +30,10 @@ model User {
   invitedBy               User?     @relation("Invites", fields: [invitedByUserId], references: [id])
   invitedUsers            User[]    @relation("Invites")
   googleAccountConnected Boolean   @default(false)
+  googleAccessToken       String?
+  googleRefreshToken      String?
+  googleTokenExpiresAt    DateTime?
+  googleScope             String?
   dailySendCapCurrent     Int       @default(20)
   apolloApiKey            String?
   createdAt               DateTime  @default(now())
