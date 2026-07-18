@@ -8,26 +8,13 @@ export type UserRole = (typeof USER_ROLES)[number];
 export const USER_STATUSES = ["active", "disabled", "invited"] as const;
 export type UserStatus = (typeof USER_STATUSES)[number];
 
-export const JOB_TYPES = ["full_time", "contract", "internship"] as const;
-export type JobType = (typeof JOB_TYPES)[number];
-
 export const EMAIL_STATUSES = ["verified", "guessed", "not_found"] as const;
 export type EmailStatus = (typeof EMAIL_STATUSES)[number];
 
 export const CHANNELS = ["email", "linkedin"] as const;
 export type Channel = (typeof CHANNELS)[number];
 
-export const CONTACT_STATUSES = [
-  "discovered",
-  "queued_email",
-  "queued_linkedin",
-  "emailed",
-  "linkedin_manual_pending",
-  "replied",
-  "meeting_booked",
-  "closed_no_response",
-  "closed_declined",
-] as const;
+export const CONTACT_STATUSES = ["discovered", "sent", "booked", "ignored"] as const;
 export type ContactStatus = (typeof CONTACT_STATUSES)[number];
 
 export const COFFEE_CHAT_OUTCOMES = [
@@ -40,47 +27,10 @@ export type CoffeeChatOutcome = (typeof COFFEE_CHAT_OUTCOMES)[number];
 
 export const CONTACT_STATUS_LABELS: Record<ContactStatus, string> = {
   discovered: "Discovered",
-  queued_email: "Queued (email, cap reached)",
-  queued_linkedin: "Queued (LinkedIn, cap reached)",
-  emailed: "Emailed",
-  linkedin_manual_pending: "Action Queue (LinkedIn)",
-  replied: "Replied",
-  meeting_booked: "Meeting Booked",
-  closed_no_response: "Closed — No Response",
-  closed_declined: "Closed — Declined",
+  sent: "Sent",
+  booked: "Booked",
+  ignored: "Ignored",
 };
-
-// Kanban-level grouping used by the pipeline board; several granular
-// contact.status values roll up into one visual column, matching the
-// spec's Section 7 kanban: Discovered -> Outreach Sent -> Replied ->
-// Meeting Booked -> Closed.
-export const KANBAN_COLUMNS = [
-  "Discovered",
-  "Outreach Sent",
-  "Replied",
-  "Meeting Booked",
-  "Closed",
-] as const;
-export type KanbanColumn = (typeof KANBAN_COLUMNS)[number];
-
-export function kanbanColumnFor(status: ContactStatus): KanbanColumn {
-  switch (status) {
-    case "discovered":
-    case "queued_email":
-    case "queued_linkedin":
-      return "Discovered";
-    case "emailed":
-    case "linkedin_manual_pending":
-      return "Outreach Sent";
-    case "replied":
-      return "Replied";
-    case "meeting_booked":
-      return "Meeting Booked";
-    case "closed_no_response":
-    case "closed_declined":
-      return "Closed";
-  }
-}
 
 export function parseStringArray(value: string | null | undefined): string[] {
   if (!value) return [];

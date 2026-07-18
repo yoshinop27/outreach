@@ -3,16 +3,14 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireSessionUser } from "@/lib/session";
 import { apiErrorResponse, NotFoundError } from "@/lib/api-helpers";
-import { JOB_TYPES, serializeStringArray } from "@/lib/types";
+import { serializeStringArray } from "@/lib/types";
 
 const updateSchema = z.object({
   companyName: z.string().min(1).optional(),
   companyDomain: z.string().optional().nullable(),
   targetTitles: z.array(z.string()).optional(),
   location: z.string().optional().nullable(),
-  jobType: z.enum(JOB_TYPES).optional(),
   seniority: z.array(z.string()).optional(),
-  active: z.boolean().optional(),
 });
 
 async function loadOwned(id: string, userId: string) {
@@ -33,9 +31,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         ...(body.companyDomain !== undefined ? { companyDomain: body.companyDomain } : {}),
         ...(body.targetTitles !== undefined ? { targetTitles: serializeStringArray(body.targetTitles) } : {}),
         ...(body.location !== undefined ? { location: body.location } : {}),
-        ...(body.jobType !== undefined ? { jobType: body.jobType } : {}),
         ...(body.seniority !== undefined ? { seniority: serializeStringArray(body.seniority) } : {}),
-        ...(body.active !== undefined ? { active: body.active } : {}),
       },
     });
     return NextResponse.json({ item });

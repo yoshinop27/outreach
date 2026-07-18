@@ -17,10 +17,16 @@ export default async function OverviewPage() {
   const session = await getSession();
   const userId = session!.user.id;
 
-  const [analytics, activeWatchlistCount, actionQueueCount, user] = await Promise.all([
+  const [analytics, watchlistCount, actionQueueCount, user] = await Promise.all([
     getAnalytics(userId, 30),
-    prisma.watchlistItem.count({ where: { userId, active: true } }),
-    prisma.contact.count({ where: { watchlistItem: { userId }, status: "linkedin_manual_pending" } }),
+    prisma.watchlistItem.count({ where: { userId } }),
+    prisma.contact.count({
+      where: {
+        watchlistItem: { userId },
+        status: "sent",
+        outreachEvents: { some: { channel: "linkedin", manualActionCompletedAt: null } },
+      },
+    }),
     prisma.user.findUniqueOrThrow({ where: { id: userId } }),
   ]);
 
@@ -38,8 +44,8 @@ export default async function OverviewPage() {
         <StatCard label="Meetings booked" value={analytics.meetingsBooked} />
         <StatCard label="Reply rate" value={`${(analytics.replyRate * 100).toFixed(1)}%`} />
         <StatCard label="Bounce rate" value={`${(analytics.bounceRate * 100).toFixed(1)}%`} />
-        <StatCard label="Active watchlist items" value={activeWatchlistCount} />
-        <StatCard label="Closed" value={analytics.funnel["Closed"] ?? 0} />
+        <StatCard label="Watchlist items" value={watchlistCount} />
+        <StatCard label="Ignored" value={analytics.funnel["Ignored"] ?? 0} />
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-5">

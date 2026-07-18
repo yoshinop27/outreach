@@ -24,19 +24,6 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     const contact = await loadOwned(params.id, user.id);
     const { status } = schema.parse(await req.json());
 
-    if (status === "replied") {
-      const latestEvent = await prisma.outreachEvent.findFirst({
-        where: { contactId: contact.id, repliedAt: null },
-        orderBy: { createdAt: "desc" },
-      });
-      if (latestEvent) {
-        await prisma.outreachEvent.update({
-          where: { id: latestEvent.id },
-          data: { repliedAt: new Date() },
-        });
-      }
-    }
-
     const updated = await prisma.contact.update({
       where: { id: contact.id },
       data: { status, lastStatusChangeAt: new Date() },

@@ -25,11 +25,10 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       });
     }
 
-    const updated = await prisma.contact.update({
-      where: { id: contact.id },
-      data: { status: "replied", lastStatusChangeAt: new Date() },
-    });
-    return NextResponse.json({ contact: updated });
+    // Status stays "sent" — a reply doesn't change the contact's pipeline
+    // stage on its own; it shows up in the Reply Inbox for the user to
+    // triage into "booked" or "ignored".
+    return NextResponse.json({ contact });
   } catch (err) {
     return apiErrorResponse(err);
   }

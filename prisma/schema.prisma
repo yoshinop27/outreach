@@ -42,9 +42,7 @@ model WatchlistItem {
   companyDomain String?
   targetTitles  String // JSON string[]
   location      String?
-  jobType       String   @default("full_time") // full_time | contract | internship
   seniority     String? // JSON string[]
-  active        Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -65,8 +63,7 @@ model Contact {
   source             String   @default("apollo")
   discoveredAt       DateTime @default(now())
   status             String   @default("discovered")
-  // discovered | queued_email | queued_linkedin | emailed | linkedin_manual_pending
-  // | replied | meeting_booked | closed_no_response | closed_declined
+  // discovered | sent | booked | ignored
   lastStatusChangeAt DateTime @default(now())
 
   outreachEvents OutreachEvent[]

@@ -60,25 +60,18 @@ export function InboxClient({ initialItems }: { initialItems: InboxItem[] }) {
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               <button
-                onClick={() => triage(item.id, "meeting_booked")}
+                onClick={() => triage(item.id, "booked")}
                 disabled={busyId === item.id}
                 className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
               >
                 Mark meeting booked
               </button>
               <button
-                onClick={() => triage(item.id, "closed_declined")}
+                onClick={() => triage(item.id, "ignored")}
                 disabled={busyId === item.id}
                 className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
               >
-                Not interested — close
-              </button>
-              <button
-                onClick={() => triage(item.id, "closed_no_response")}
-                disabled={busyId === item.id}
-                className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-              >
-                No further response — close
+                Not interested — ignore
               </button>
             </div>
           </div>

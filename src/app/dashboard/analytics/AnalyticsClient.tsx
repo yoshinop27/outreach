@@ -14,7 +14,7 @@ import {
 } from "recharts";
 import clsx from "clsx";
 import { apiFetch } from "@/lib/fetcher";
-import { KANBAN_COLUMNS } from "@/lib/types";
+import { CONTACT_STATUSES, CONTACT_STATUS_LABELS } from "@/lib/types";
 import type { AnalyticsResult } from "@/lib/analytics";
 
 const BLUE = "#2a78d6";
@@ -50,7 +50,10 @@ export function AnalyticsClient({ initialData }: { initialData: AnalyticsResult 
     }
   }
 
-  const funnelData = KANBAN_COLUMNS.map((col) => ({ stage: col, count: data.funnel[col] ?? 0 }));
+  const funnelData = CONTACT_STATUSES.map((s) => ({
+    stage: CONTACT_STATUS_LABELS[s],
+    count: data.funnel[CONTACT_STATUS_LABELS[s]] ?? 0,
+  }));
   const replyData = data.replySeries.map((d) => ({
     date: d.date.slice(5),
     replies: d.replies,

@@ -12,7 +12,7 @@ export default async function ActionQueuePage() {
     prisma.template.findFirst({ where: { userId, channel: "linkedin", isActive: true } }),
     prisma.contact.findMany({
       where: {
-        status: "linkedin_manual_pending",
+        status: "sent",
         watchlistItem: { userId },
         outreachEvents: {
           some: { channel: "linkedin", manualActionCompletedAt: null },

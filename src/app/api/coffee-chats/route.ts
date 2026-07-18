@@ -57,7 +57,7 @@ export async function POST(req: Request) {
       }),
       prisma.contact.update({
         where: { id: contact.id },
-        data: { status: "meeting_booked", lastStatusChangeAt: new Date() },
+        data: { status: "booked", lastStatusChangeAt: new Date() },
       }),
     ]);
 

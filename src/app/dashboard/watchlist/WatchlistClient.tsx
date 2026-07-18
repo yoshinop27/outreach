@@ -3,17 +3,13 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/fetcher";
-import { JOB_TYPES, type JobType } from "@/lib/types";
-
 interface WatchlistItemView {
   id: string;
   companyName: string;
   companyDomain: string | null;
   targetTitles: string[];
   location: string | null;
-  jobType: string;
   seniority: string[];
-  active: boolean;
   contactCount: number;
 }
 
@@ -22,7 +18,6 @@ const emptyForm = {
   companyDomain: "",
   targetTitles: "",
   location: "",
-  jobType: "full_time" as JobType,
   seniority: "",
 };
 
@@ -53,9 +48,7 @@ export function WatchlistClient({ initialItems }: { initialItems: WatchlistItemV
           companyDomain: form.companyDomain || null,
           targetTitles: form.targetTitles.split(",").map((s) => s.trim()).filter(Boolean),
           location: form.location || null,
-          jobType: form.jobType,
           seniority: form.seniority.split(",").map((s) => s.trim()).filter(Boolean),
-          active: true,
         }),
       });
       setItems((prev) => [
@@ -65,9 +58,7 @@ export function WatchlistClient({ initialItems }: { initialItems: WatchlistItemV
           companyDomain: item.companyDomain,
           targetTitles: form.targetTitles.split(",").map((s) => s.trim()).filter(Boolean),
           location: item.location,
-          jobType: item.jobType,
           seniority: form.seniority.split(",").map((s) => s.trim()).filter(Boolean),
-          active: item.active,
           contactCount: 0,
         },
         ...prev,
@@ -79,11 +70,6 @@ export function WatchlistClient({ initialItems }: { initialItems: WatchlistItemV
     } finally {
       setBusy(false);
     }
-  }
-
-  async function toggleActive(id: string, active: boolean) {
-    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, active } : i)));
-    await apiFetch(`/api/watchlist/${id}`, { method: "PATCH", body: JSON.stringify({ active }) });
   }
 
   async function remove(id: string) {
@@ -133,7 +119,7 @@ export function WatchlistClient({ initialItems }: { initialItems: WatchlistItemV
             disabled={busy}
             className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
           >
-            Run discovery for all active
+            Run discovery for all
           </button>
           <button
             onClick={() => setShowForm((v) => !v)}
@@ -173,17 +159,6 @@ export function WatchlistClient({ initialItems }: { initialItems: WatchlistItemV
             onChange={(e) => setForm({ ...form, location: e.target.value })}
             className="rounded-md border border-slate-300 px-3 py-2 text-sm"
           />
-          <select
-            value={form.jobType}
-            onChange={(e) => setForm({ ...form, jobType: e.target.value as JobType })}
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
-          >
-            {JOB_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t.replace("_", " ")}
-              </option>
-            ))}
-          </select>
           <input
             placeholder="Seniority, comma-separated (optional)"
             value={form.seniority}
@@ -209,9 +184,7 @@ export function WatchlistClient({ initialItems }: { initialItems: WatchlistItemV
               <th className="px-4 py-3">Company</th>
               <th className="px-4 py-3">Titles</th>
               <th className="px-4 py-3">Location</th>
-              <th className="px-4 py-3">Job type</th>
               <th className="px-4 py-3">Contacts</th>
-              <th className="px-4 py-3">Active</th>
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
@@ -221,15 +194,7 @@ export function WatchlistClient({ initialItems }: { initialItems: WatchlistItemV
                 <td className="px-4 py-3 font-medium text-slate-900">{item.companyName}</td>
                 <td className="px-4 py-3 text-slate-600">{item.targetTitles.join(", ") || "—"}</td>
                 <td className="px-4 py-3 text-slate-600">{item.location || "—"}</td>
-                <td className="px-4 py-3 text-slate-600">{item.jobType.replace("_", " ")}</td>
                 <td className="px-4 py-3 text-slate-600">{item.contactCount}</td>
-                <td className="px-4 py-3">
-                  <input
-                    type="checkbox"
-                    checked={item.active}
-                    onChange={(e) => toggleActive(item.id, e.target.checked)}
-                  />
-                </td>
                 <td className="space-x-3 px-4 py-3 text-right">
                   <button onClick={() => runDiscovery(item.id)} className="text-xs font-medium text-slate-700 hover:underline">
                     Run discovery
@@ -242,7 +207,7 @@ export function WatchlistClient({ initialItems }: { initialItems: WatchlistItemV
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-sm text-slate-400">
+                <td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-400">
                   No watchlist items yet. Add a company to get started.
                 </td>
               </tr>

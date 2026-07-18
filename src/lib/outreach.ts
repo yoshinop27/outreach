@@ -7,7 +7,7 @@
 import { prisma } from "@/lib/prisma";
 import { discoverContacts } from "@/lib/discover_contacts";
 import { mockSendEmail } from "@/lib/mock-google";
-import { parseStringArray, renderTemplate, type ContactStatus } from "@/lib/types";
+import { parseStringArray, renderTemplate } from "@/lib/types";
 
 // Independent of whichever cap mode is active (manual now, adaptive later —
 // spec 6.2 item 4), to avoid over-contacting one org in a single run.
@@ -41,7 +41,6 @@ export async function runDiscoveryAndDispatch(
   const watchlistItems = await prisma.watchlistItem.findMany({
     where: {
       userId,
-      active: true,
       ...(watchlistItemId ? { id: watchlistItemId } : {}),
     },
   });
@@ -56,7 +55,7 @@ export async function runDiscoveryAndDispatch(
     const existingLinkedin = new Set(existing.map((c) => c.linkedinUrl).filter(Boolean));
     const existingEmail = new Set(existing.map((c) => c.email).filter(Boolean));
 
-    const discovered = discoverContacts({
+    const discovered = await discoverContacts({
       companyName: item.companyName,
       companyDomain: item.companyDomain,
       targetTitles: parseStringArray(item.targetTitles),
@@ -87,11 +86,10 @@ export async function runDiscoveryAndDispatch(
   ]);
 
   const todayStart = startOfToday();
-  const dispatchableStatuses: ContactStatus[] = ["discovered", "queued_email", "queued_linkedin"];
 
   const pendingContacts = await prisma.contact.findMany({
     where: {
-      status: { in: dispatchableStatuses },
+      status: "discovered",
       watchlistItem: {
         userId,
         ...(watchlistItemId ? { id: watchlistItemId } : {}),
@@ -126,13 +124,7 @@ export async function runDiscoveryAndDispatch(
     const companyCapOk = companyCount < PER_COMPANY_DAILY_CAP;
 
     if (!capOk || !companyCapOk) {
-      const nextStatus: ContactStatus = channel === "email" ? "queued_email" : "queued_linkedin";
-      if (contact.status !== nextStatus) {
-        await prisma.contact.update({
-          where: { id: contact.id },
-          data: { status: nextStatus, lastStatusChangeAt: new Date() },
-        });
-      }
+      // Stays "discovered" — cap reached for today, picked up again next run.
       queuedForNextRun++;
       continue;
     }
@@ -173,7 +165,7 @@ export async function runDiscoveryAndDispatch(
         }),
         prisma.contact.update({
           where: { id: contact.id },
-          data: { status: "emailed", lastStatusChangeAt: new Date() },
+          data: { status: "sent", lastStatusChangeAt: new Date() },
         }),
       ]);
       emailsSent++;
@@ -192,7 +184,7 @@ export async function runDiscoveryAndDispatch(
         }),
         prisma.contact.update({
           where: { id: contact.id },
-          data: { status: "linkedin_manual_pending", lastStatusChangeAt: new Date() },
+          data: { status: "sent", lastStatusChangeAt: new Date() },
         }),
       ]);
       linkedinQueued++;

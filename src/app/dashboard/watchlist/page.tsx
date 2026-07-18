@@ -17,9 +17,7 @@ export default async function WatchlistPage() {
     companyDomain: item.companyDomain,
     targetTitles: parseStringArray(item.targetTitles),
     location: item.location,
-    jobType: item.jobType,
     seniority: parseStringArray(item.seniority),
-    active: item.active,
     contactCount: item._count.contacts,
   }));
 

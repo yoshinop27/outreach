@@ -5,7 +5,11 @@ import { InboxClient } from "./InboxClient";
 export default async function InboxPage() {
   const session = await getSession();
   const contacts = await prisma.contact.findMany({
-    where: { status: "replied", watchlistItem: { userId: session!.user.id } },
+    where: {
+      status: "sent",
+      watchlistItem: { userId: session!.user.id },
+      outreachEvents: { some: { repliedAt: { not: null } } },
+    },
     orderBy: { lastStatusChangeAt: "asc" },
     include: { outreachEvents: { orderBy: { createdAt: "desc" }, take: 1 } },
   });

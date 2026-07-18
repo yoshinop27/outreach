@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireSessionUser } from "@/lib/session";
 import { apiErrorResponse } from "@/lib/api-helpers";
-import { JOB_TYPES, serializeStringArray } from "@/lib/types";
+import { serializeStringArray } from "@/lib/types";
 
 export async function GET() {
   try {
@@ -24,9 +24,7 @@ const createSchema = z.object({
   companyDomain: z.string().optional().nullable(),
   targetTitles: z.array(z.string()).default([]),
   location: z.string().optional().nullable(),
-  jobType: z.enum(JOB_TYPES).default("full_time"),
   seniority: z.array(z.string()).default([]),
-  active: z.boolean().default(true),
 });
 
 export async function POST(req: Request) {
@@ -40,9 +38,7 @@ export async function POST(req: Request) {
         companyDomain: body.companyDomain,
         targetTitles: serializeStringArray(body.targetTitles),
         location: body.location,
-        jobType: body.jobType,
         seniority: serializeStringArray(body.seniority),
-        active: body.active,
       },
     });
     return NextResponse.json({ item }, { status: 201 });

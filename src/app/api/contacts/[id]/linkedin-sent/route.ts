@@ -33,12 +33,11 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       });
     }
 
+    // Status stays "sent" either way — a reply here (like an email reply)
+    // surfaces in the Reply Inbox rather than changing status directly.
     const updated = await prisma.contact.update({
       where: { id: contact.id },
-      data: {
-        status: theyReplied ? "replied" : contact.status,
-        lastStatusChangeAt: new Date(),
-      },
+      data: { lastStatusChangeAt: new Date() },
     });
     return NextResponse.json({ contact: updated });
   } catch (err) {

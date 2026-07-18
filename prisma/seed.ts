@@ -32,9 +32,7 @@ async function main() {
         companyDomain: "acme.com",
         targetTitles: serializeStringArray(["Software Engineer", "Technical Recruiter"]),
         location: "Remote",
-        jobType: "full_time",
         seniority: serializeStringArray(["Mid", "Senior"]),
-        active: true,
       },
     });
     await prisma.watchlistItem.create({
@@ -44,8 +42,6 @@ async function main() {
         companyDomain: "globex.com",
         targetTitles: serializeStringArray(["Recruiter"]),
         location: "New York, NY",
-        jobType: "full_time",
-        active: true,
       },
     });
     console.log("Seeded sample watchlist items.");

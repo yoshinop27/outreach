@@ -19,7 +19,7 @@ export default async function CalendarPage({
     prisma.contact.findMany({
       where: {
         watchlistItem: { userId },
-        status: { in: ["replied", "meeting_booked"] },
+        status: { in: ["sent", "booked"] },
       },
       select: { id: true, fullName: true, companyName: true },
     }),

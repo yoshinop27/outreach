@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { kanbanColumnFor, type ContactStatus } from "@/lib/types";
+import { CONTACT_STATUSES, CONTACT_STATUS_LABELS, type ContactStatus } from "@/lib/types";
 
 export interface AnalyticsResult {
   windowDays: number;
@@ -61,16 +61,10 @@ export async function getAnalytics(userId: string, days: number): Promise<Analyt
   const bounceCount = emailEvents.filter((e) => e.bounced).length;
   const bounceRate = emailsSent > 0 ? bounceCount / emailsSent : 0;
 
-  const funnel: Record<string, number> = {
-    Discovered: 0,
-    "Outreach Sent": 0,
-    Replied: 0,
-    "Meeting Booked": 0,
-    Closed: 0,
-  };
+  const funnel: Record<string, number> = Object.fromEntries(CONTACT_STATUSES.map((s) => [CONTACT_STATUS_LABELS[s], 0]));
   const byCompany = new Map<string, number>();
   for (const c of allContacts) {
-    funnel[kanbanColumnFor(c.status as ContactStatus)]++;
+    funnel[CONTACT_STATUS_LABELS[c.status as ContactStatus]]++;
     byCompany.set(c.companyName, (byCompany.get(c.companyName) ?? 0) + 1);
   }
 
