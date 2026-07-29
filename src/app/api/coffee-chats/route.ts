@@ -38,6 +38,7 @@ export async function POST(req: Request) {
 
     const scheduledAt = new Date(body.scheduledAt);
     const { calendarEventId } = await mockCreateCalendarEvent({
+      userId: user.id,
       organizerEmail: user.email ?? "",
       attendeeEmail: contact.email,
       subject: `Coffee chat with ${contact.fullName}`,

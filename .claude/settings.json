@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(node -e \"const {google} = require\\('googleapis'\\); console.log\\(typeof google.calendar\\);\")",
+      "Bash(curl -s -b cookies.txt \"http://localhost:3000/api/calendar/events?start=2026-07-01T00:00:00.000Z&end=2026-08-01T00:00:00.000Z\" -w \"\\\\nstatus: %{http_code}\\\\n\")",
+      "Bash(sqlite3 /home/yoshinop/outreach/prisma/dev.db \"SELECT email, googleAccountConnected, googleScope FROM User WHERE email='prestonyoshino@gmail.com';\")",
+      "Bash(curl -s -b cookies.txt \"http://localhost:3000/dashboard/calendar\" -o cal5.html -w \"status: %{http_code}\\\\n\")",
+      "Bash(curl -s -b cookies.txt \"http://localhost:3000/dashboard/calendar\" -o cal6.html -w \"status: %{http_code}\\\\n\")"
+    ]
+  }
+}

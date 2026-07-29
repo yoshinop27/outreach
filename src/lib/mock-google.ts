@@ -1,12 +1,21 @@
-// Stand-in for the Gmail API (`users.messages.send`) and Google Calendar API
-// (`events.insert`) (see spec Section 4, items 5 and 7). Real integration
-// would call the Google APIs using the user's connected Google OAuth token;
-// these functions keep the same call shape so the rest of the app (outreach
-// dispatch, coffee-chat scheduling) doesn't need to change when that's wired
-// up.
+// Gmail send (`users.messages.send`) and Google Calendar
+// (`events.list` / `events.insert`) are both real, per-user Google API calls
+// using the signed-in user's connected OAuth token (see spec Section 4,
+// items 5 and 7). Function names kept as `mock*` for historical reasons —
+// nothing here is actually mocked anymore.
 
-import { google } from "googleapis";
+import { google, type calendar_v3 } from "googleapis";
 import { prisma } from "@/lib/prisma";
+
+// Derived from googleapis's own re-export rather than importing
+// "google-auth-library" directly — the package tree has two separate
+// installs of it, which produces a nominal type mismatch otherwise.
+type OAuth2Client = InstanceType<typeof google.auth.OAuth2>;
+
+// Distinguishes user-facing Google connectivity errors (not configured, not
+// connected, expired, rate-limited) from unexpected bugs, so apiErrorResponse
+// can surface the message instead of collapsing it to a generic 500.
+export class GoogleApiError extends Error {}
 
 export interface MockSendEmailResult {
   sentAt: Date;
@@ -39,19 +48,27 @@ function parseGoogleErrorReason(err: unknown): string | undefined {
   return maybeErr.response?.data?.error?.errors?.[0]?.reason;
 }
 
-export async function mockSendEmail(params: {
+interface GoogleUserRecord {
+  id: string;
+  googleAccessToken: string | null;
+  googleRefreshToken: string | null;
+  googleTokenExpiresAt: Date | null;
+}
+
+// Shared by every Google API call in this file: loads the signed-in user's
+// stored tokens and builds an authenticated client. `googleapis` refreshes
+// the access token in-place on `oauth2.credentials` when it's expired, using
+// the refresh token — `persistGoogleTokens` below writes that back.
+async function getGoogleClientForUser(params: {
   userId?: string;
-  fromUserEmail: string;
-  to: string;
-  subject: string;
-  body: string;
-}): Promise<MockSendEmailResult> {
+  fromUserEmail?: string;
+}): Promise<{ oauth2: OAuth2Client; user: GoogleUserRecord }> {
   if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
-    throw new Error("Google OAuth is not configured on the server.");
+    throw new GoogleApiError("Google OAuth is not configured on the server.");
   }
 
   const user = await prisma.user.findFirst({
-    where: params.userId ? { id: params.userId } : { email: params.fromUserEmail.toLowerCase() },
+    where: params.userId ? { id: params.userId } : { email: params.fromUserEmail!.toLowerCase() },
     select: {
       id: true,
       googleAccessToken: true,
@@ -61,11 +78,11 @@ export async function mockSendEmail(params: {
   });
 
   if (!user) {
-    throw new Error("Signed-in user record not found for Gmail send.");
+    throw new GoogleApiError("Signed-in user record not found for Google API call.");
   }
   if (!user.googleRefreshToken && !user.googleAccessToken) {
     await prisma.user.update({ where: { id: user.id }, data: { googleAccountConnected: false } });
-    throw new Error("Google Gmail send is not connected. Sign out and sign back in with Google.");
+    throw new GoogleApiError("Google account is not connected. Sign out and sign back in with Google.");
   }
 
   const oauth2 = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET);
@@ -75,6 +92,51 @@ export async function mockSendEmail(params: {
     expiry_date: user.googleTokenExpiresAt?.getTime(),
   });
 
+  return { oauth2, user };
+}
+
+async function persistGoogleTokens(oauth2: OAuth2Client, user: GoogleUserRecord): Promise<void> {
+  const nextCreds = oauth2.credentials;
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      googleAccountConnected: true,
+      googleAccessToken: nextCreds.access_token ?? user.googleAccessToken,
+      googleRefreshToken: nextCreds.refresh_token ?? user.googleRefreshToken,
+      googleTokenExpiresAt:
+        typeof nextCreds.expiry_date === "number" ? new Date(nextCreds.expiry_date) : user.googleTokenExpiresAt,
+    },
+  });
+}
+
+// Normalizes Gmail/Calendar API errors into messages the UI can show
+// directly, and flags the account as disconnected on an auth failure.
+async function throwGoogleApiError(err: unknown, userId: string, action: string): Promise<never> {
+  const status = parseGoogleErrorStatus(err);
+  const reason = parseGoogleErrorReason(err);
+  if (status === 429 || reason === "rateLimitExceeded" || reason === "userRateLimitExceeded") {
+    throw new GoogleApiError(`Google ${action} rate limit reached. Please retry in a few minutes.`);
+  }
+  if (status === 401 || reason === "authError") {
+    await prisma.user.update({ where: { id: userId }, data: { googleAccountConnected: false } });
+    throw new GoogleApiError("Google authentication expired. Sign out and sign back in to reconnect.");
+  }
+  if (status === 403 || reason === "insufficientPermissions") {
+    throw new GoogleApiError(
+      `Missing permission for ${action}. Sign out and sign back in with Google, and accept all requested scopes.`,
+    );
+  }
+  throw err instanceof Error ? err : new Error(`Google ${action} failed.`);
+}
+
+export async function mockSendEmail(params: {
+  userId?: string;
+  fromUserEmail: string;
+  to: string;
+  subject: string;
+  body: string;
+}): Promise<MockSendEmailResult> {
+  const { oauth2, user } = await getGoogleClientForUser({ userId: params.userId, fromUserEmail: params.fromUserEmail });
   const gmail = google.gmail({ version: "v1", auth: oauth2 });
 
   const rawMessage = [
@@ -93,33 +155,10 @@ export async function mockSendEmail(params: {
       requestBody: { raw: encodeEmailBody(rawMessage) },
     });
   } catch (err) {
-    const status = parseGoogleErrorStatus(err);
-    const reason = parseGoogleErrorReason(err);
-    if (status === 429 || reason === "rateLimitExceeded" || reason === "userRateLimitExceeded") {
-      throw new Error("Gmail send rate limit reached. Please retry in a few minutes.");
-    }
-    if (status === 401 || reason === "authError") {
-      await prisma.user.update({ where: { id: user.id }, data: { googleAccountConnected: false } });
-      throw new Error("Google authentication expired. Sign out and sign back in to reconnect Gmail send.");
-    }
-    if (status === 403 || reason === "insufficientPermissions") {
-      throw new Error("Missing Gmail send permission. Reconnect Google and grant gmail.send scope.");
-    }
-    throw err;
+    await throwGoogleApiError(err, user.id, "Gmail send");
   }
 
-  const nextCreds = oauth2.credentials;
-  await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      googleAccountConnected: true,
-      googleAccessToken: nextCreds.access_token ?? user.googleAccessToken,
-      googleRefreshToken: nextCreds.refresh_token ?? user.googleRefreshToken,
-      googleTokenExpiresAt:
-        typeof nextCreds.expiry_date === "number" ? new Date(nextCreds.expiry_date) : user.googleTokenExpiresAt,
-    },
-  });
-
+  await persistGoogleTokens(oauth2, user);
   return { sentAt: new Date(), bounced: false };
 }
 
@@ -127,12 +166,78 @@ export interface MockCalendarEventResult {
   calendarEventId: string;
 }
 
-export async function mockCreateCalendarEvent(_params: {
+export async function mockCreateCalendarEvent(params: {
+  userId?: string;
   organizerEmail: string;
   attendeeEmail?: string | null;
   subject: string;
   start: Date;
   durationMinutes: number;
 }): Promise<MockCalendarEventResult> {
-  return { calendarEventId: `mock-evt-${Math.random().toString(36).slice(2, 10)}` };
+  const { oauth2, user } = await getGoogleClientForUser({ userId: params.userId, fromUserEmail: params.organizerEmail });
+  const calendar = google.calendar({ version: "v3", auth: oauth2 });
+  const end = new Date(params.start.getTime() + params.durationMinutes * 60_000);
+
+  let eventId: string | null | undefined;
+  try {
+    const res = await calendar.events.insert({
+      calendarId: "primary",
+      requestBody: {
+        summary: params.subject,
+        start: { dateTime: params.start.toISOString() },
+        end: { dateTime: end.toISOString() },
+        attendees: params.attendeeEmail ? [{ email: params.attendeeEmail }] : undefined,
+      },
+    });
+    eventId = res.data.id;
+  } catch (err) {
+    await throwGoogleApiError(err, user.id, "Calendar event creation");
+  }
+
+  await persistGoogleTokens(oauth2, user);
+  return { calendarEventId: eventId ?? "" };
+}
+
+export interface GoogleCalendarEventView {
+  id: string;
+  summary: string;
+  start: string;
+  end: string;
+  htmlLink: string | null;
+}
+
+export async function listCalendarEvents(params: {
+  userId: string;
+  timeMin: Date;
+  timeMax: Date;
+}): Promise<GoogleCalendarEventView[]> {
+  const { oauth2, user } = await getGoogleClientForUser({ userId: params.userId });
+  const calendar = google.calendar({ version: "v3", auth: oauth2 });
+
+  let items: calendar_v3.Schema$Event[] = [];
+  try {
+    const res = await calendar.events.list({
+      calendarId: "primary",
+      timeMin: params.timeMin.toISOString(),
+      timeMax: params.timeMax.toISOString(),
+      singleEvents: true,
+      orderBy: "startTime",
+      maxResults: 250,
+    });
+    items = res.data.items ?? [];
+  } catch (err) {
+    await throwGoogleApiError(err, user.id, "Calendar read");
+  }
+
+  await persistGoogleTokens(oauth2, user);
+
+  return items
+    .filter((e) => e.id && (e.start?.dateTime || e.start?.date))
+    .map((e) => ({
+      id: e.id!,
+      summary: e.summary ?? "(No title)",
+      start: e.start!.dateTime ?? e.start!.date!,
+      end: e.end?.dateTime ?? e.end?.date ?? e.start!.dateTime ?? e.start!.date!,
+      htmlLink: e.htmlLink ?? null,
+    }));
 }
