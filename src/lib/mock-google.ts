@@ -121,6 +121,16 @@ async function throwGoogleApiError(err: unknown, userId: string, action: string)
     await prisma.user.update({ where: { id: userId }, data: { googleAccountConnected: false } });
     throw new GoogleApiError("Google authentication expired. Sign out and sign back in to reconnect.");
   }
+  // Distinct from a scope problem: the underlying API just isn't turned on
+  // for this Google Cloud project. Re-authing does nothing here — it's a
+  // one-time console.cloud.google.com setup step, so say that instead of
+  // sending the user in a sign-out/sign-in loop that can't fix it.
+  if (reason === "accessNotConfigured") {
+    throw new GoogleApiError(
+      `${action} failed because the underlying Google API isn't enabled for this project yet. ` +
+        "Enable it in the Google Cloud Console (APIs & Services → Library), then retry in a minute or two.",
+    );
+  }
   if (status === 403 || reason === "insufficientPermissions") {
     throw new GoogleApiError(
       `Missing permission for ${action}. Sign out and sign back in with Google, and accept all requested scopes.`,

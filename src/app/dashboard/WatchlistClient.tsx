@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/fetcher";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 interface WatchlistItemView {
   id: string;
   companyName: string;
@@ -28,6 +29,7 @@ export function WatchlistClient({ initialItems }: { initialItems: WatchlistItemV
   const [showForm, setShowForm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; companyName: string } | null>(null);
 
   // router.refresh() re-runs the server component and passes fresh
   // initialItems, but useState's initializer only applies on first mount —
@@ -72,10 +74,19 @@ export function WatchlistClient({ initialItems }: { initialItems: WatchlistItemV
     }
   }
 
-  async function remove(id: string) {
-    if (!confirm("Delete this watchlist item and its discovered contacts?")) return;
-    await apiFetch(`/api/watchlist/${id}`, { method: "DELETE" });
-    setItems((prev) => prev.filter((i) => i.id !== id));
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    const { id } = deleteTarget;
+    setBusy(true);
+    try {
+      await apiFetch(`/api/watchlist/${id}`, { method: "DELETE" });
+      setItems((prev) => prev.filter((i) => i.id !== id));
+      setDeleteTarget(null);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Failed to delete watchlist item");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function runDiscovery(id?: string) {
@@ -87,12 +98,15 @@ export function WatchlistClient({ initialItems }: { initialItems: WatchlistItemV
         body: JSON.stringify(id ? { watchlistItemId: id } : {}),
       });
       setMessage(
-        `Discovered ${summary.contactsDiscovered} new contact(s). Dispatched ${summary.emailsSent} email(s), queued ${summary.linkedinQueued} LinkedIn action(s) in the Action Queue.` +
+        `Discovered ${summary.contactsDiscovered} new contact(s). Sent ${summary.emailsSent} email(s).` +
+          (summary.skippedNoEmail
+            ? ` ${summary.skippedNoEmail} contact(s) skipped — no email on file (send manually from the Pipeline once one's found).`
+            : "") +
           (summary.queuedForNextRun
             ? ` ${summary.queuedForNextRun} contact(s) held back by the daily or per-company cap — they'll go out on the next run.`
             : "") +
           (summary.skippedNoActiveTemplate
-            ? ` ${summary.skippedNoActiveTemplate} contact(s) skipped — no active template for that channel.`
+            ? ` ${summary.skippedNoActiveTemplate} contact(s) skipped — no active email template.`
             : ""),
       );
       router.refresh();
@@ -199,7 +213,10 @@ export function WatchlistClient({ initialItems }: { initialItems: WatchlistItemV
                   <button onClick={() => runDiscovery(item.id)} className="text-xs font-medium text-slate-700 hover:underline">
                     Run discovery
                   </button>
-                  <button onClick={() => remove(item.id)} className="text-xs font-medium text-rose-600 hover:underline">
+                  <button
+                    onClick={() => setDeleteTarget({ id: item.id, companyName: item.companyName })}
+                    className="text-xs font-medium text-rose-600 hover:underline"
+                  >
                     Delete
                   </button>
                 </td>
@@ -215,6 +232,16 @@ export function WatchlistClient({ initialItems }: { initialItems: WatchlistItemV
           </tbody>
         </table>
       </div>
+
+      {deleteTarget && (
+        <ConfirmDialog
+          title={`Delete ${deleteTarget.companyName} from the watchlist?`}
+          description="This also removes every contact discovered for it."
+          busy={busy}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 }

@@ -7,14 +7,11 @@ import clsx from "clsx";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Overview" },
-  { href: "/dashboard/watchlist", label: "Watchlist" },
   { href: "/dashboard/pipeline", label: "Pipeline" },
-  { href: "/dashboard/action-queue", label: "Action Queue" },
   { href: "/dashboard/inbox", label: "Reply Inbox" },
   { href: "/dashboard/templates", label: "Templates" },
   { href: "/dashboard/calendar", label: "Calendar" },
   { href: "/dashboard/analytics", label: "Analytics" },
-  { href: "/dashboard/settings", label: "Settings" },
 ];
 
 export function Sidebar({
@@ -51,15 +48,26 @@ export function Sidebar({
           );
         })}
         {isAdmin && (
-          <Link
-            href="/dashboard/admin"
-            className={clsx(
-              "block rounded-md px-3 py-2 text-sm font-medium transition-colors",
-              pathname === "/dashboard/admin" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100",
-            )}
-          >
-            Admin
-          </Link>
+          <>
+            <Link
+              href="/dashboard/settings"
+              className={clsx(
+                "block rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                pathname === "/dashboard/settings" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100",
+              )}
+            >
+              Settings
+            </Link>
+            <Link
+              href="/dashboard/admin"
+              className={clsx(
+                "block rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                pathname === "/dashboard/admin" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100",
+              )}
+            >
+              Admin
+            </Link>
+          </>
         )}
       </nav>
       <div className="border-t border-slate-200 p-3">

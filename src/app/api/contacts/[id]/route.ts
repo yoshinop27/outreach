@@ -33,3 +33,16 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     return apiErrorResponse(err);
   }
 }
+
+// Removes the contact from the pipeline entirely, along with its outreach
+// events and coffee chats (both cascade-delete via the Contact relation).
+export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  try {
+    const user = await requireSessionUser();
+    const contact = await loadOwned(params.id, user.id);
+    await prisma.contact.delete({ where: { id: contact.id } });
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    return apiErrorResponse(err);
+  }
+}

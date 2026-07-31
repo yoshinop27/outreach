@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { discoverContacts } from "@/lib/discover_contacts";
 import { mockSendEmail } from "@/lib/mock-google";
 import { parseStringArray, renderTemplate } from "@/lib/types";
+import { NotFoundError, BadRequestError } from "@/lib/api-helpers";
 
 // Independent of whichever cap mode is active (manual now, adaptive later —
 // spec 6.2 item 4), to avoid over-contacting one org in a single run.
@@ -27,9 +28,9 @@ function splitName(fullName: string): { firstName: string; lastName: string } {
 export interface DiscoveryDispatchSummary {
   contactsDiscovered: number;
   emailsSent: number;
-  linkedinQueued: number;
   queuedForNextRun: number;
   skippedNoActiveTemplate: number;
+  skippedNoEmail: number;
 }
 
 export async function runDiscoveryAndDispatch(
@@ -80,10 +81,7 @@ export async function runDiscoveryAndDispatch(
     }
   }
 
-  const [emailTemplate, linkedinTemplate] = await Promise.all([
-    prisma.template.findFirst({ where: { userId, channel: "email", isActive: true } }),
-    prisma.template.findFirst({ where: { userId, channel: "linkedin", isActive: true } }),
-  ]);
+  const emailTemplate = await prisma.template.findFirst({ where: { userId, channel: "email", isActive: true } });
 
   const todayStart = startOfToday();
 
@@ -113,12 +111,18 @@ export async function runDiscoveryAndDispatch(
 
   let dailyCount = dispatchedTodayCount;
   let emailsSent = 0;
-  let linkedinQueued = 0;
   let queuedForNextRun = 0;
   let skippedNoActiveTemplate = 0;
+  let skippedNoEmail = 0;
 
   for (const contact of pendingContacts) {
-    const channel: "email" | "linkedin" = contact.emailStatus === "verified" && contact.email ? "email" : "linkedin";
+    if (!contact.email) {
+      // No email on file — stays "discovered", hidden from the Pipeline by
+      // default until one is found; there's no other outreach channel now.
+      skippedNoEmail++;
+      continue;
+    }
+
     const companyCount = companyCounts.get(contact.companyName) ?? 0;
     const capOk = dailyCount < user.dailySendCapCurrent;
     const companyCapOk = companyCount < PER_COMPANY_DAILY_CAP;
@@ -129,70 +133,108 @@ export async function runDiscoveryAndDispatch(
       continue;
     }
 
-    if (channel === "email") {
-      if (!emailTemplate) {
-        skippedNoActiveTemplate++;
-        continue;
-      }
-      const { firstName, lastName } = splitName(contact.fullName);
-      const ctx = {
-        first_name: firstName,
-        last_name: lastName,
-        full_name: contact.fullName,
-        title: contact.title ?? "",
-        company: contact.companyName,
-        sender_name: user.displayName ?? user.email,
-      };
-      const subject = renderTemplate(emailTemplate.subject ?? "", ctx);
-      const body = renderTemplate(emailTemplate.body, ctx);
-      const result = await mockSendEmail({
-        userId: user.id,
-        fromUserEmail: user.email,
-        to: contact.email!,
-        subject,
-        body,
-      });
-
-      await prisma.$transaction([
-        prisma.outreachEvent.create({
-          data: {
-            contactId: contact.id,
-            templateId: emailTemplate.id,
-            channel: "email",
-            sentAt: result.sentAt,
-            bounced: result.bounced,
-          },
-        }),
-        prisma.contact.update({
-          where: { id: contact.id },
-          data: { status: "sent", lastStatusChangeAt: new Date() },
-        }),
-      ]);
-      emailsSent++;
-    } else {
-      if (!linkedinTemplate) {
-        skippedNoActiveTemplate++;
-        continue;
-      }
-      await prisma.$transaction([
-        prisma.outreachEvent.create({
-          data: {
-            contactId: contact.id,
-            templateId: linkedinTemplate.id,
-            channel: "linkedin",
-          },
-        }),
-        prisma.contact.update({
-          where: { id: contact.id },
-          data: { status: "sent", lastStatusChangeAt: new Date() },
-        }),
-      ]);
-      linkedinQueued++;
+    if (!emailTemplate) {
+      skippedNoActiveTemplate++;
+      continue;
     }
+
+    const { firstName, lastName } = splitName(contact.fullName);
+    const ctx = {
+      first_name: firstName,
+      last_name: lastName,
+      full_name: contact.fullName,
+      title: contact.title ?? "",
+      company: contact.companyName,
+      sender_name: user.displayName ?? user.email,
+    };
+    const subject = renderTemplate(emailTemplate.subject ?? "", ctx);
+    const body = renderTemplate(emailTemplate.body, ctx);
+    const result = await mockSendEmail({
+      userId: user.id,
+      fromUserEmail: user.email,
+      to: contact.email,
+      subject,
+      body,
+    });
+
+    await prisma.$transaction([
+      prisma.outreachEvent.create({
+        data: {
+          contactId: contact.id,
+          templateId: emailTemplate.id,
+          channel: "email",
+          sentAt: result.sentAt,
+          bounced: result.bounced,
+        },
+      }),
+      prisma.contact.update({
+        where: { id: contact.id },
+        data: { status: "sent", lastStatusChangeAt: new Date() },
+      }),
+    ]);
+    emailsSent++;
 
     dailyCount++;
     companyCounts.set(contact.companyName, companyCount + 1);
   }
 
-  return { contactsDiscovered, emailsSent, linkedinQueued, queuedForNextRun, skippedNoActiveTemplate };
+  return { contactsDiscovered, emailsSent, queuedForNextRun, skippedNoActiveTemplate, skippedNoEmail };
+}
+
+// Manual, single-contact send triggered from the Pipeline "Send email"
+// button — bypasses the daily/per-company caps above since it's a deliberate
+// one-off action by the user, not the bulk discovery dispatch.
+export async function sendEmailToContact(contactId: string, userId: string) {
+  const contact = await prisma.contact.findFirst({
+    where: { id: contactId, watchlistItem: { userId } },
+  });
+  if (!contact) throw new NotFoundError();
+  if (!contact.email) {
+    throw new BadRequestError("This contact has no email on file.");
+  }
+
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+  const emailTemplate = await prisma.template.findFirst({
+    where: { userId, channel: "email", isActive: true },
+  });
+  if (!emailTemplate) {
+    throw new BadRequestError("No active email template. Add one in Templates.");
+  }
+
+  const { firstName, lastName } = splitName(contact.fullName);
+  const ctx = {
+    first_name: firstName,
+    last_name: lastName,
+    full_name: contact.fullName,
+    title: contact.title ?? "",
+    company: contact.companyName,
+    sender_name: user.displayName ?? user.email,
+  };
+  const subject = renderTemplate(emailTemplate.subject ?? "", ctx);
+  const body = renderTemplate(emailTemplate.body, ctx);
+  const result = await mockSendEmail({
+    userId: user.id,
+    fromUserEmail: user.email,
+    to: contact.email,
+    subject,
+    body,
+  });
+
+  const [, updated] = await prisma.$transaction([
+    prisma.outreachEvent.create({
+      data: {
+        contactId: contact.id,
+        templateId: emailTemplate.id,
+        channel: "email",
+        sentAt: result.sentAt,
+        bounced: result.bounced,
+      },
+    }),
+    prisma.contact.update({
+      where: { id: contact.id },
+      data: { status: "sent", lastStatusChangeAt: new Date() },
+    }),
+  ]);
+
+  return updated;
 }

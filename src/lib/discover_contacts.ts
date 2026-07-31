@@ -1,6 +1,29 @@
 import type { EmailStatus } from "@/lib/types";
 import { createApolloSearchApi, createApolloEnrichmentApi } from "./apollo-client";
-import type { BulkPeopleEnrichment200ResponseMatchesInner } from "@/apollo-client";
+import { ResponseError, type BulkPeopleEnrichment200ResponseMatchesInner } from "@/apollo-client";
+
+// Distinguishes Apollo API failures (bad key, plan doesn't include this
+// endpoint, rate limit, etc.) from unexpected bugs, so apiErrorResponse can
+// surface Apollo's own error message instead of a generic 500.
+export class ApolloApiError extends Error {}
+
+async function callApollo<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof ResponseError) {
+      let message = `Apollo API request failed (${err.response.status}).`;
+      try {
+        const body = (await err.response.json()) as { error?: string };
+        if (body?.error) message = body.error;
+      } catch {
+        // response wasn't JSON — keep the generic message above
+      }
+      throw new ApolloApiError(message);
+    }
+    throw err;
+  }
+}
 
 export interface DiscoveredContact {
   fullName: string;
@@ -58,11 +81,13 @@ const discoverContactsNoEmail = async function (params: {
   const count = paramCount ? paramCount : 10;
   const api = createApolloSearchApi();
   // get response of people from api call
-  const searchResults = await api.peopleApiSearch({
-    personTitles: targetTitles,
-    qOrganizationDomainsList: companyDomain ? [companyDomain] : undefined,
-    perPage: count,
-  });
+  const searchResults = await callApollo(() =>
+    api.peopleApiSearch({
+      personTitles: targetTitles,
+      qOrganizationDomainsList: companyDomain ? [companyDomain] : undefined,
+      perPage: count,
+    }),
+  );
   // keep only people with a verified email on file and a usable Apollo id
   // (id is needed to match bulk enrichment results back to this candidate)
   return (searchResults.people ?? [])
@@ -85,11 +110,13 @@ export async function discoverContactsWithEmail(params: {
 }): Promise<DiscoveredContact | null> {
   const { companyName, fullName } = params;
   const api = createApolloEnrichmentApi();
-  
-  const result = await api.peopleEnrichment({
-    name: fullName,
-    organizationName: companyName,
-  });
+
+  const result = await callApollo(() =>
+    api.peopleEnrichment({
+      name: fullName,
+      organizationName: companyName,
+    }),
+  );
 
   const person = result.person;
   if (!person?.email) return null;
@@ -119,11 +146,13 @@ export async function discoverContacts(params: {
   const api = createApolloEnrichmentApi();
   const batches = await Promise.all(
     chunk(candidates, BULK_ENRICHMENT_BATCH_SIZE).map((batch) =>
-      api.bulkPeopleEnrichment({
-        bulkPeopleEnrichmentRequest: {
-          details: batch.map((candidate) => ({ id: candidate.apolloId })),
-        },
-      }),
+      callApollo(() =>
+        api.bulkPeopleEnrichment({
+          bulkPeopleEnrichmentRequest: {
+            details: batch.map((candidate) => ({ id: candidate.apolloId })),
+          },
+        }),
+      ),
     ),
   );
 

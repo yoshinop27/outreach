@@ -1,9 +1,12 @@
+import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { SettingsClient } from "./SettingsClient";
 
 export default async function SettingsPage() {
   const session = await getSession();
+  if (session?.user.role !== "admin") redirect("/dashboard");
+
   const user = await prisma.user.findUniqueOrThrow({ where: { id: session!.user.id } });
 
   return (

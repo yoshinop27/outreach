@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { requireSessionUser } from "@/lib/session";
+import { requireAdminUser } from "@/lib/session";
 import { apiErrorResponse } from "@/lib/api-helpers";
 
 export async function GET() {
   try {
-    const sessionUser = await requireSessionUser();
+    const sessionUser = await requireAdminUser();
     const user = await prisma.user.findUniqueOrThrow({ where: { id: sessionUser.id } });
     return NextResponse.json({
       user: {
@@ -30,7 +30,7 @@ const updateSchema = z.object({
 
 export async function PATCH(req: Request) {
   try {
-    const sessionUser = await requireSessionUser();
+    const sessionUser = await requireAdminUser();
     const body = updateSchema.parse(await req.json());
     const user = await prisma.user.update({
       where: { id: sessionUser.id },
