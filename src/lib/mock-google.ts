@@ -4,7 +4,7 @@
 // items 5 and 7). Function names kept as `mock*` for historical reasons —
 // nothing here is actually mocked anymore.
 
-import { google, type calendar_v3 } from "googleapis";
+import { google, type calendar_v3, type gmail_v1 } from "googleapis";
 import { prisma } from "@/lib/prisma";
 
 // Derived from googleapis's own re-export rather than importing
@@ -20,6 +20,7 @@ export class GoogleApiError extends Error {}
 export interface MockSendEmailResult {
   sentAt: Date;
   bounced: boolean;
+  threadId: string | null;
 }
 
 function encodeEmailBody(raw: string): string {
@@ -159,17 +160,56 @@ export async function mockSendEmail(params: {
     params.body,
   ].join("\r\n");
 
+  let threadId: string | null = null;
   try {
-    await gmail.users.messages.send({
+    const res = await gmail.users.messages.send({
       userId: "me",
       requestBody: { raw: encodeEmailBody(rawMessage) },
     });
+    threadId = res.data.threadId ?? null;
   } catch (err) {
     await throwGoogleApiError(err, user.id, "Gmail send");
   }
 
   await persistGoogleTokens(oauth2, user);
-  return { sentAt: new Date(), bounced: false };
+  return { sentAt: new Date(), bounced: false, threadId };
+}
+
+// Polls a single Gmail thread for a reply — the signal is "does this thread
+// now have a message that isn't From the sender," since Gmail groups a sent
+// message and its replies into one thread by default. Returns the reply's
+// timestamp, or null if the thread is still just our own message(s).
+export async function checkThreadForReply(params: {
+  userId: string;
+  fromUserEmail: string;
+  threadId: string;
+}): Promise<Date | null> {
+  const { oauth2, user } = await getGoogleClientForUser({ userId: params.userId });
+  const gmail = google.gmail({ version: "v1", auth: oauth2 });
+
+  let messages: gmail_v1.Schema$Message[] = [];
+  try {
+    const res = await gmail.users.threads.get({
+      userId: "me",
+      id: params.threadId,
+      format: "metadata",
+      metadataHeaders: ["From", "Date"],
+    });
+    messages = res.data.messages ?? [];
+  } catch (err) {
+    await throwGoogleApiError(err, user.id, "Gmail thread read");
+  }
+
+  await persistGoogleTokens(oauth2, user);
+
+  const senderEmail = params.fromUserEmail.toLowerCase();
+  const reply = messages.find((m) => {
+    const from = m.payload?.headers?.find((h) => h.name === "From")?.value ?? "";
+    return !from.toLowerCase().includes(senderEmail);
+  });
+
+  if (!reply) return null;
+  return reply.internalDate ? new Date(Number(reply.internalDate)) : new Date();
 }
 
 export interface MockCalendarEventResult {

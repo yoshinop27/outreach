@@ -5,12 +5,9 @@ export interface AnalyticsResult {
   windowDays: number;
   contactsDiscovered: number;
   emailsSent: number;
-  linkedinQueuedTotal: number;
-  linkedinCompleted: number;
   meetingsBooked: number;
   replyRate: number;
   bounceRate: number;
-  openRateNote: string;
   funnel: Record<string, number>;
   byCompany: { company: string; count: number }[];
   templateStats: { id: string; name: string; channel: string; sent: number; replied: number; replyRate: number }[];
@@ -24,40 +21,32 @@ export async function getAnalytics(userId: string, days: number): Promise<Analyt
 
   const userScope = { watchlistItem: { userId } };
 
-  const [contactsDiscovered, emailEvents, linkedinEvents, repliedEvents, coffeeChats, allContacts, templates] =
-    await Promise.all([
-      prisma.contact.count({ where: { watchlistItem: { userId }, discoveredAt: { gte: windowStart } } }),
-      prisma.outreachEvent.findMany({
-        where: { contact: userScope, channel: "email", sentAt: { gte: windowStart } },
-        select: { id: true, bounced: true, sentAt: true, repliedAt: true },
-      }),
-      prisma.outreachEvent.findMany({
-        where: { contact: userScope, channel: "linkedin", createdAt: { gte: windowStart } },
-        select: { id: true, manualActionCompletedAt: true, repliedAt: true },
-      }),
-      prisma.outreachEvent.findMany({
-        where: { contact: userScope, repliedAt: { gte: windowStart } },
-        select: { id: true, repliedAt: true, channel: true },
-      }),
-      prisma.coffeeChat.count({
-        where: { contact: userScope, createdAt: { gte: windowStart } },
-      }),
-      prisma.contact.findMany({
-        where: { watchlistItem: { userId } },
-        select: { status: true, companyName: true },
-      }),
-      prisma.template.findMany({
-        where: { userId },
-        include: { outreachEvents: { select: { repliedAt: true, sentAt: true, manualActionCompletedAt: true } } },
-      }),
-    ]);
+  const [contactsDiscovered, emailEvents, repliedEvents, coffeeChats, allContacts, templates] = await Promise.all([
+    prisma.contact.count({ where: { watchlistItem: { userId }, discoveredAt: { gte: windowStart } } }),
+    prisma.outreachEvent.findMany({
+      where: { contact: userScope, channel: "email", sentAt: { gte: windowStart } },
+      select: { id: true, bounced: true, sentAt: true, repliedAt: true },
+    }),
+    prisma.outreachEvent.findMany({
+      where: { contact: userScope, channel: "email", repliedAt: { gte: windowStart } },
+      select: { id: true, repliedAt: true },
+    }),
+    prisma.coffeeChat.count({
+      where: { contact: userScope, createdAt: { gte: windowStart } },
+    }),
+    prisma.contact.findMany({
+      where: { watchlistItem: { userId } },
+      select: { status: true, companyName: true },
+    }),
+    prisma.template.findMany({
+      where: { userId },
+      include: { outreachEvents: { select: { repliedAt: true, sentAt: true, manualActionCompletedAt: true } } },
+    }),
+  ]);
 
   const emailsSent = emailEvents.length;
-  const linkedinCompleted = linkedinEvents.filter((e) => e.manualActionCompletedAt).length;
-  const linkedinQueuedTotal = linkedinEvents.length;
-  const totalDispatched = emailsSent + linkedinCompleted;
   const repliedCount = repliedEvents.length;
-  const replyRate = totalDispatched > 0 ? repliedCount / totalDispatched : 0;
+  const replyRate = emailsSent > 0 ? repliedCount / emailsSent : 0;
   const bounceCount = emailEvents.filter((e) => e.bounced).length;
   const bounceRate = emailsSent > 0 ? bounceCount / emailsSent : 0;
 
@@ -100,13 +89,9 @@ export async function getAnalytics(userId: string, days: number): Promise<Analyt
     windowDays: days,
     contactsDiscovered,
     emailsSent,
-    linkedinQueuedTotal,
-    linkedinCompleted,
     meetingsBooked: coffeeChats,
     replyRate,
     bounceRate,
-    openRateNote:
-      "Not tracked — Gmail doesn't report opens natively without a tracking pixel (see spec Section 11).",
     funnel,
     byCompany: Array.from(byCompany.entries()).map(([company, count]) => ({ company, count })),
     templateStats,

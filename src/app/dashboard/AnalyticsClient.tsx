@@ -82,17 +82,13 @@ export function AnalyticsClient({ initialData }: { initialData: AnalyticsResult 
         </div>
       </div>
 
-      <div className={clsx("grid grid-cols-2 gap-4 md:grid-cols-4", loading && "opacity-50")}>
+      <div className={clsx("grid grid-cols-2 gap-4 md:grid-cols-5", loading && "opacity-50")}>
         <StatCard label="Contacts discovered" value={data.contactsDiscovered} />
         <StatCard label="Emails sent" value={data.emailsSent} />
-        <StatCard label="LinkedIn queued" value={data.linkedinQueuedTotal} />
-        <StatCard label="LinkedIn completed" value={data.linkedinCompleted} />
         <StatCard label="Reply rate" value={`${(data.replyRate * 100).toFixed(1)}%`} />
         <StatCard label="Bounce rate" value={`${(data.bounceRate * 100).toFixed(1)}%`} />
         <StatCard label="Meetings booked" value={data.meetingsBooked} />
-        <StatCard label="Open rate" value="—" />
       </div>
-      <p className="text-xs text-slate-400">{data.openRateNote}</p>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="rounded-xl border border-slate-200 bg-white p-5">

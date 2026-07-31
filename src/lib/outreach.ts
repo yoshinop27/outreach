@@ -6,7 +6,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { discoverContacts } from "@/lib/discover_contacts";
-import { mockSendEmail } from "@/lib/mock-google";
+import { mockSendEmail, checkThreadForReply } from "@/lib/mock-google";
 import { parseStringArray, renderTemplate } from "@/lib/types";
 import { NotFoundError, BadRequestError } from "@/lib/api-helpers";
 
@@ -163,6 +163,7 @@ export async function runDiscoveryAndDispatch(
           contactId: contact.id,
           templateId: emailTemplate.id,
           channel: "email",
+          threadId: result.threadId,
           sentAt: result.sentAt,
           bounced: result.bounced,
         },
@@ -226,6 +227,7 @@ export async function sendEmailToContact(contactId: string, userId: string) {
         contactId: contact.id,
         templateId: emailTemplate.id,
         channel: "email",
+        threadId: result.threadId,
         sentAt: result.sentAt,
         bounced: result.bounced,
       },
@@ -237,4 +239,60 @@ export async function sendEmailToContact(contactId: string, userId: string) {
   ]);
 
   return updated;
+}
+
+export interface ReplyPollSummary {
+  usersChecked: number;
+  threadsChecked: number;
+  repliesFound: number;
+  errors: number;
+}
+
+// Reply detection has no push/webhook hook (see the Reply Inbox note) — this
+// polls every OutreachEvent still waiting on a reply, one Gmail thread read
+// each, and records the reply's timestamp the moment a thread grows a
+// message that isn't from us. Triggered on a schedule (see
+// /api/cron/poll-replies), not per-user session, so it runs across every
+// connected account in one pass rather than being scoped to a request.
+export async function pollRepliesForAllUsers(): Promise<ReplyPollSummary> {
+  const users = await prisma.user.findMany({
+    where: { googleAccountConnected: true },
+    select: { id: true, email: true },
+  });
+
+  const summary: ReplyPollSummary = { usersChecked: 0, threadsChecked: 0, repliesFound: 0, errors: 0 };
+
+  for (const user of users) {
+    summary.usersChecked++;
+
+    const pendingEvents = await prisma.outreachEvent.findMany({
+      where: {
+        channel: "email",
+        threadId: { not: null },
+        repliedAt: null,
+        contact: { watchlistItem: { userId: user.id } },
+      },
+      select: { id: true, threadId: true },
+    });
+
+    for (const event of pendingEvents) {
+      summary.threadsChecked++;
+      try {
+        const repliedAt = await checkThreadForReply({
+          userId: user.id,
+          fromUserEmail: user.email,
+          threadId: event.threadId!,
+        });
+        if (repliedAt) {
+          await prisma.outreachEvent.update({ where: { id: event.id }, data: { repliedAt } });
+          summary.repliesFound++;
+        }
+      } catch (err) {
+        console.error(`Reply poll failed for outreachEvent ${event.id}:`, err);
+        summary.errors++;
+      }
+    }
+  }
+
+  return summary;
 }

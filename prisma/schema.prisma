@@ -96,6 +96,7 @@ model OutreachEvent {
   templateId              String?
   template                Template? @relation(fields: [templateId], references: [id])
   channel                 String // email | linkedin
+  threadId                String? // Gmail thread id — polled for replies (see pollReplies in outreach.ts)
   sentAt                  DateTime?
   openedAt                DateTime?
   repliedAt               DateTime?

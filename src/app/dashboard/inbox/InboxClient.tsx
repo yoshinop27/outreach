@@ -37,6 +37,10 @@ export function InboxClient({ initialItems }: { initialItems: InboxItem[] }) {
           Replies land here for you to read and triage yourself — nothing is auto-classified (spec Section
           6.3). Pick what happens next for each contact.
         </p>
+        <p className="mt-2 rounded-md bg-blue-50 px-3 py-2 text-xs text-blue-800">
+          Replies are detected by polling each sent email's Gmail thread roughly every 2 hours (there's no
+          real-time push hook) — a new reply can take up to that long to show up here.
+        </p>
       </div>
 
       <div className="space-y-3">

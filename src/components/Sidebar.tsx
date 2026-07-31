@@ -11,7 +11,6 @@ const NAV_ITEMS = [
   { href: "/dashboard/inbox", label: "Reply Inbox" },
   { href: "/dashboard/templates", label: "Templates" },
   { href: "/dashboard/calendar", label: "Calendar" },
-  { href: "/dashboard/analytics", label: "Analytics" },
 ];
 
 export function Sidebar({
