@@ -1,6 +1,8 @@
 import type { EmailStatus } from "@/lib/types";
 import { createApolloSearchApi, createApolloEnrichmentApi } from "./apollo-client";
-import { ResponseError, type BulkPeopleEnrichment200ResponseMatchesInner } from "@/apollo-client";
+import { ResponseError } from "@/apollo-client/runtime";
+import type { BulkPeopleEnrichment200ResponseMatchesInner } from "@/apollo-client/models/BulkPeopleEnrichment200ResponseMatchesInner";
+import type { SearchApi } from "@/apollo-client/apis/SearchApi";
 
 // Distinguishes Apollo API failures (bad key, plan doesn't include this
 // endpoint, rate limit, etc.) from unexpected bugs, so apiErrorResponse can
@@ -70,21 +72,62 @@ function weightedEmailStatus(): EmailStatus {
   return "not_found";
 }
 
+// peopleApiSearch's personLocations is applied server-side, but the search
+// response only tells us whether Apollo *has* city/state/country on file for
+// a person — not the values, so we can't verify the filter actually held.
+// The enrichment response does include real city/state/country, so this
+// double-checks the requested location against it rather than trusting
+// Apollo's server-side match unverified. Missing location data on the
+// enriched record isn't treated as a mismatch — there's nothing to check.
+function matchesRequestedLocation(
+  match: Pick<BulkPeopleEnrichment200ResponseMatchesInner, "city" | "state" | "country">,
+  location: string,
+): boolean {
+  const needle = location.trim().toLowerCase();
+  if (!needle) return true;
+  const haystacks = [match.city, match.state, match.country].filter((v): v is string => !!v).map((v) => v.toLowerCase());
+  if (haystacks.length === 0) return true;
+  return haystacks.some((h) => h.includes(needle) || needle.includes(h));
+}
+
+// peopleApiSearch can only scope by domain or organizationId, not by name —
+// so when a watchlist item has no companyDomain on file, resolve the name to
+// an organizationId via organizationSearch first. Without this, an empty
+// companyDomain silently drops the company filter entirely and searches
+// Apollo's whole person database for the target titles.
+async function resolveOrganizationId(api: SearchApi, companyName: string): Promise<string | null> {
+  const result = await callApollo(() => api.organizationSearch({ qOrganizationName: companyName }));
+  return result.organizations?.[0]?.id ?? null;
+}
+
 // a function that users the Apollo SDK to discover contacts based on a company name, domain, title
 const discoverContactsNoEmail = async function (params: {
   companyName: string;
   companyDomain?: string | null;
   targetTitles: string[];
+  location?: string | null;
+  seniority?: string[];
   count?: number;
 }): Promise<SearchCandidate[]> {
-  const { companyName, companyDomain, targetTitles, count: paramCount } = params;
+  const { companyName, companyDomain, targetTitles, location, seniority, count: paramCount } = params;
   const count = paramCount ? paramCount : 10;
   const api = createApolloSearchApi();
+
+  let organizationIds: string[] | undefined;
+  if (!companyDomain) {
+    const organizationId = await resolveOrganizationId(api, companyName);
+    if (!organizationId) return []; // can't scope to this company at all — don't return unrelated people
+    organizationIds = [organizationId];
+  }
+
   // get response of people from api call
   const searchResults = await callApollo(() =>
     api.peopleApiSearch({
       personTitles: targetTitles,
       qOrganizationDomainsList: companyDomain ? [companyDomain] : undefined,
+      organizationIds,
+      personLocations: location ? [location] : undefined,
+      personSeniorities: seniority?.length ? seniority : undefined,
       perPage: count,
     }),
   );
@@ -138,8 +181,11 @@ export async function discoverContacts(params: {
   companyName: string;
   companyDomain?: string | null;
   targetTitles: string[];
+  location?: string | null;
+  seniority?: string[];
   count?: number;
 }): Promise<DiscoveredContact[]> {
+  const { location } = params;
   const candidates = await discoverContactsNoEmail(params);
   if (candidates.length === 0) return [];
 
@@ -163,19 +209,22 @@ export async function discoverContacts(params: {
     }
   }
 
-  return candidates.map((candidate) => {
+  return candidates.flatMap((candidate): DiscoveredContact[] => {
     const match = matchesById.get(candidate.apolloId);
     if (!match?.email) {
       const { apolloId: _apolloId, ...unenriched } = candidate;
-      return unenriched;
+      return [unenriched];
     }
-    return {
-      fullName: match.name ?? candidate.fullName,
-      title: candidate.title,
-      linkedinUrl: match.linkedinUrl ?? "",
-      email: match.email,
-      emailStatus: (match.emailStatus as EmailStatus | undefined) ?? "guessed",
-      companyName: candidate.companyName,
-    };
+    if (location && !matchesRequestedLocation(match, location)) return [];
+    return [
+      {
+        fullName: match.name ?? candidate.fullName,
+        title: candidate.title,
+        linkedinUrl: match.linkedinUrl ?? "",
+        email: match.email,
+        emailStatus: (match.emailStatus as EmailStatus | undefined) ?? "guessed",
+        companyName: candidate.companyName,
+      },
+    ];
   });
 }

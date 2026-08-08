@@ -1,8 +1,8 @@
-// Combines the spec's "Discovery worker" (6.1) and "Outreach dispatch"
-// (6.2) into one synchronous run, triggered manually from the dashboard
-// instead of on a cron/queue. A real scheduled job would call this exact
-// function per watchlist item — the cap/dedupe/dispatch logic doesn't
-// change, only the trigger does.
+// Spec's "Discovery worker" (6.1) — finds and stores new contacts for a
+// user's watchlist. Triggered manually from the dashboard instead of on a
+// cron/queue; a real scheduled job would call this exact function per
+// watchlist item. Does NOT send anything — sending is a deliberate,
+// per-contact action from the Pipeline (see sendEmailToContact below).
 
 import { prisma } from "@/lib/prisma";
 import { discoverContacts } from "@/lib/discover_contacts";
@@ -10,35 +10,17 @@ import { mockSendEmail, checkThreadForReply } from "@/lib/mock-google";
 import { parseStringArray, renderTemplate } from "@/lib/types";
 import { NotFoundError, BadRequestError } from "@/lib/api-helpers";
 
-// Independent of whichever cap mode is active (manual now, adaptive later —
-// spec 6.2 item 4), to avoid over-contacting one org in a single run.
-const PER_COMPANY_DAILY_CAP = 3;
-
-function startOfToday(): Date {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
 function splitName(fullName: string): { firstName: string; lastName: string } {
   const [firstName, ...rest] = fullName.trim().split(/\s+/);
   return { firstName: firstName ?? fullName, lastName: rest.join(" ") };
 }
 
-export interface DiscoveryDispatchSummary {
+export interface DiscoverySummary {
   contactsDiscovered: number;
-  emailsSent: number;
-  queuedForNextRun: number;
-  skippedNoActiveTemplate: number;
   skippedNoEmail: number;
 }
 
-export async function runDiscoveryAndDispatch(
-  userId: string,
-  watchlistItemId?: string,
-): Promise<DiscoveryDispatchSummary> {
-  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
-
+export async function runDiscovery(userId: string, watchlistItemId?: string): Promise<DiscoverySummary> {
   const watchlistItems = await prisma.watchlistItem.findMany({
     where: {
       userId,
@@ -47,6 +29,7 @@ export async function runDiscoveryAndDispatch(
   });
 
   let contactsDiscovered = 0;
+  let skippedNoEmail = 0;
 
   for (const item of watchlistItems) {
     const existing = await prisma.contact.findMany({
@@ -60,6 +43,8 @@ export async function runDiscoveryAndDispatch(
       companyName: item.companyName,
       companyDomain: item.companyDomain,
       targetTitles: parseStringArray(item.targetTitles),
+      location: item.location,
+      seniority: parseStringArray(item.seniority),
     });
 
     for (const d of discovered) {
@@ -70,6 +55,7 @@ export async function runDiscoveryAndDispatch(
           fullName: d.fullName,
           title: d.title,
           companyName: item.companyName,
+          job: item.job,
           linkedinUrl: d.linkedinUrl,
           email: d.email,
           emailStatus: d.emailStatus,
@@ -78,113 +64,17 @@ export async function runDiscoveryAndDispatch(
         },
       });
       contactsDiscovered++;
-    }
-  }
-
-  const emailTemplate = await prisma.template.findFirst({ where: { userId, channel: "email", isActive: true } });
-
-  const todayStart = startOfToday();
-
-  const pendingContacts = await prisma.contact.findMany({
-    where: {
-      status: "discovered",
-      watchlistItem: {
-        userId,
-        ...(watchlistItemId ? { id: watchlistItemId } : {}),
-      },
-    },
-    orderBy: { discoveredAt: "asc" },
-  });
-
-  const dispatchedTodayCount = await prisma.outreachEvent.count({
-    where: { createdAt: { gte: todayStart }, contact: { watchlistItem: { userId } } },
-  });
-
-  const todaysEventContacts = await prisma.outreachEvent.findMany({
-    where: { createdAt: { gte: todayStart }, contact: { watchlistItem: { userId } } },
-    select: { contact: { select: { companyName: true } } },
-  });
-  const companyCounts = new Map<string, number>();
-  for (const e of todaysEventContacts) {
-    companyCounts.set(e.contact.companyName, (companyCounts.get(e.contact.companyName) ?? 0) + 1);
-  }
-
-  let dailyCount = dispatchedTodayCount;
-  let emailsSent = 0;
-  let queuedForNextRun = 0;
-  let skippedNoActiveTemplate = 0;
-  let skippedNoEmail = 0;
-
-  for (const contact of pendingContacts) {
-    if (!contact.email) {
       // No email on file — stays "discovered", hidden from the Pipeline by
       // default until one is found; there's no other outreach channel now.
-      skippedNoEmail++;
-      continue;
+      if (!d.email) skippedNoEmail++;
     }
-
-    const companyCount = companyCounts.get(contact.companyName) ?? 0;
-    const capOk = dailyCount < user.dailySendCapCurrent;
-    const companyCapOk = companyCount < PER_COMPANY_DAILY_CAP;
-
-    if (!capOk || !companyCapOk) {
-      // Stays "discovered" — cap reached for today, picked up again next run.
-      queuedForNextRun++;
-      continue;
-    }
-
-    if (!emailTemplate) {
-      skippedNoActiveTemplate++;
-      continue;
-    }
-
-    const { firstName, lastName } = splitName(contact.fullName);
-    const ctx = {
-      first_name: firstName,
-      last_name: lastName,
-      full_name: contact.fullName,
-      title: contact.title ?? "",
-      company: contact.companyName,
-      sender_name: user.displayName ?? user.email,
-    };
-    const subject = renderTemplate(emailTemplate.subject ?? "", ctx);
-    const body = renderTemplate(emailTemplate.body, ctx);
-    const result = await mockSendEmail({
-      userId: user.id,
-      fromUserEmail: user.email,
-      to: contact.email,
-      subject,
-      body,
-    });
-
-    await prisma.$transaction([
-      prisma.outreachEvent.create({
-        data: {
-          contactId: contact.id,
-          templateId: emailTemplate.id,
-          channel: "email",
-          threadId: result.threadId,
-          sentAt: result.sentAt,
-          bounced: result.bounced,
-        },
-      }),
-      prisma.contact.update({
-        where: { id: contact.id },
-        data: { status: "sent", lastStatusChangeAt: new Date() },
-      }),
-    ]);
-    emailsSent++;
-
-    dailyCount++;
-    companyCounts.set(contact.companyName, companyCount + 1);
   }
 
-  return { contactsDiscovered, emailsSent, queuedForNextRun, skippedNoActiveTemplate, skippedNoEmail };
+  return { contactsDiscovered, skippedNoEmail };
 }
 
 // Manual, single-contact send triggered from the Pipeline "Send email"
-// button — bypasses the daily/per-company caps above since it's a deliberate
-// one-off action by the user, not the bulk discovery dispatch.
+// button — the only way an email goes out; discovery never sends on its own.
 export async function sendEmailToContact(contactId: string, userId: string) {
   const contact = await prisma.contact.findFirst({
     where: { id: contactId, watchlistItem: { userId } },
@@ -195,11 +85,22 @@ export async function sendEmailToContact(contactId: string, userId: string) {
   }
 
   const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
-  const emailTemplate = await prisma.template.findFirst({
+
+  // SQLite has no case-insensitive query mode in Prisma, and the candidate
+  // set (active email templates for one user) is small — so match in JS: a
+  // template whose companyName matches the contact's company (case-insensitive)
+  // wins; otherwise fall back to the default template (companyName is null).
+  const activeEmailTemplates = await prisma.template.findMany({
     where: { userId, channel: "email", isActive: true },
   });
+  const companyKey = contact.companyName.trim().toLowerCase();
+  const emailTemplate =
+    activeEmailTemplates.find((t) => t.companyName?.trim().toLowerCase() === companyKey) ??
+    activeEmailTemplates.find((t) => !t.companyName);
   if (!emailTemplate) {
-    throw new BadRequestError("No active email template. Add one in Templates.");
+    throw new BadRequestError(
+      `No active email template for ${contact.companyName} and no default template. Add one in Templates.`,
+    );
   }
 
   const { firstName, lastName } = splitName(contact.fullName);
@@ -209,6 +110,7 @@ export async function sendEmailToContact(contactId: string, userId: string) {
     full_name: contact.fullName,
     title: contact.title ?? "",
     company: contact.companyName,
+    job: contact.job ?? "",
     sender_name: user.displayName ?? user.email,
   };
   const subject = renderTemplate(emailTemplate.subject ?? "", ctx);
@@ -219,6 +121,14 @@ export async function sendEmailToContact(contactId: string, userId: string) {
     to: contact.email,
     subject,
     body,
+    attachment:
+      user.resumeData && user.resumeName && user.resumeMimeType
+        ? {
+            filename: user.resumeName,
+            mimeType: user.resumeMimeType,
+            data: Buffer.from(user.resumeData),
+          }
+        : null,
   });
 
   const [, updated] = await prisma.$transaction([

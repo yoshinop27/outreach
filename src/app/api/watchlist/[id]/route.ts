@@ -11,6 +11,7 @@ const updateSchema = z.object({
   targetTitles: z.array(z.string()).optional(),
   location: z.string().optional().nullable(),
   seniority: z.array(z.string()).optional(),
+  job: z.string().optional().nullable(),
 });
 
 async function loadOwned(id: string, userId: string) {
@@ -32,6 +33,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         ...(body.targetTitles !== undefined ? { targetTitles: serializeStringArray(body.targetTitles) } : {}),
         ...(body.location !== undefined ? { location: body.location } : {}),
         ...(body.seniority !== undefined ? { seniority: serializeStringArray(body.seniority) } : {}),
+        ...(body.job !== undefined ? { job: body.job } : {}),
       },
     });
     return NextResponse.json({ item });

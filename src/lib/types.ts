@@ -52,6 +52,7 @@ export const TEMPLATE_VARIABLES = [
   "full_name",
   "title",
   "company",
+  "job",
   "sender_name",
 ] as const;
 
@@ -61,6 +62,7 @@ export interface TemplateVariableContext {
   full_name: string;
   title: string;
   company: string;
+  job: string;
   sender_name: string;
 }
 

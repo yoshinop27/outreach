@@ -5,7 +5,13 @@ import { requireSessionUser } from "@/lib/session";
 import { apiErrorResponse, NotFoundError } from "@/lib/api-helpers";
 import { CONTACT_STATUSES } from "@/lib/types";
 
-const schema = z.object({ status: z.enum(CONTACT_STATUSES) });
+const schema = z.object({
+  status: z.enum(CONTACT_STATUSES).optional(),
+  // Apollo's scraped title is sometimes a raw "Talent | Recruiter | Sourcer"
+  // pileup — this lets the user clean it up before it's used in {{title}}
+  // in an outreach email.
+  title: z.string().max(200).optional().nullable(),
+});
 
 async function loadOwned(id: string, userId: string) {
   const contact = await prisma.contact.findFirst({
@@ -15,18 +21,21 @@ async function loadOwned(id: string, userId: string) {
   return contact;
 }
 
-// Generic manual status transition — used by the pipeline board and the
+// Generic manual status/title edit — used by the pipeline board and the
 // Reply Inbox triage view (spec 6.3: replies are read and re-categorized by
 // the user, never auto-classified).
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   try {
     const user = await requireSessionUser();
     const contact = await loadOwned(params.id, user.id);
-    const { status } = schema.parse(await req.json());
+    const { status, title } = schema.parse(await req.json());
 
     const updated = await prisma.contact.update({
       where: { id: contact.id },
-      data: { status, lastStatusChangeAt: new Date() },
+      data: {
+        ...(status ? { status, lastStatusChangeAt: new Date() } : {}),
+        ...(title !== undefined ? { title: title?.trim() || null } : {}),
+      },
     });
     return NextResponse.json({ contact: updated });
   } catch (err) {

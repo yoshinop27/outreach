@@ -83,6 +83,7 @@ export default async function OverviewPage() {
     targetTitles: parseStringArray(item.targetTitles),
     location: item.location,
     seniority: parseStringArray(item.seniority),
+    job: item.job,
     contactCount: item._count.contacts,
   }));
 

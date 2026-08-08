@@ -4,8 +4,20 @@ import { prisma } from "@/lib/prisma";
 import { requireSessionUser } from "@/lib/session";
 import { apiErrorResponse, NotFoundError } from "@/lib/api-helpers";
 
+const templateListSelect = {
+  id: true,
+  channel: true,
+  name: true,
+  companyName: true,
+  subject: true,
+  body: true,
+  isActive: true,
+} as const;
+
 const updateSchema = z.object({
   name: z.string().min(1).optional(),
+  // Empty string clears it back to the default/fallback template for the channel.
+  companyName: z.string().optional().nullable(),
   subject: z.string().optional().nullable(),
   body: z.string().min(1).optional(),
   isActive: z.boolean().optional(),
@@ -21,10 +33,15 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   try {
     const user = await requireSessionUser();
     await loadOwned(params.id, user.id);
-    const body = updateSchema.parse(await req.json());
+    const { companyName, ...rest } = updateSchema.parse(await req.json());
+
     const template = await prisma.template.update({
       where: { id: params.id },
-      data: body,
+      data: {
+        ...rest,
+        ...(companyName !== undefined ? { companyName: (companyName ?? "").trim() || null } : {}),
+      },
+      select: templateListSelect,
     });
     return NextResponse.json({ template });
   } catch (err) {

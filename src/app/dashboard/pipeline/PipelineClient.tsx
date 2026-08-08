@@ -7,11 +7,14 @@ import { STATUS_COLORS } from "@/components/StatusBadge";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { CONTACT_STATUSES, CONTACT_STATUS_LABELS, type ContactStatus } from "@/lib/types";
 
+const ALL_STATUSES = new Set<ContactStatus>(CONTACT_STATUSES);
+
 interface ContactView {
   id: string;
   fullName: string;
   title: string | null;
   companyName: string;
+  job: string | null;
   email: string | null;
   emailStatus: string;
   linkedinUrl: string | null;
@@ -100,8 +103,11 @@ export function PipelineClient({ initialContacts }: { initialContacts: ContactVi
   const [busyId, setBusyId] = useState<string | null>(null);
   const [modalContactId, setModalContactId] = useState<string | null>(null);
   const [showNoEmail, setShowNoEmail] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<Set<ContactStatus>>(ALL_STATUSES);
   const [message, setMessage] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; fullName: string } | null>(null);
+  const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
+  const [titleDraft, setTitleDraft] = useState("");
 
   async function updateStatus(id: string, status: ContactStatus) {
     setBusyId(id);
@@ -111,6 +117,18 @@ export function PipelineClient({ initialContacts }: { initialContacts: ContactVi
     } finally {
       setBusyId(null);
     }
+  }
+
+  function startEditTitle(c: ContactView) {
+    setEditingTitleId(c.id);
+    setTitleDraft(c.title ?? "");
+  }
+
+  async function saveTitle(id: string) {
+    const title = titleDraft.trim() || null;
+    setEditingTitleId(null);
+    setContacts((prev) => prev.map((c) => (c.id === id ? { ...c, title } : c)));
+    await apiFetch(`/api/contacts/${id}`, { method: "PATCH", body: JSON.stringify({ title }) });
   }
 
   async function sendEmail(id: string) {
@@ -147,9 +165,18 @@ export function PipelineClient({ initialContacts }: { initialContacts: ContactVi
     }
   }
 
+  function toggleStatusFilter(status: ContactStatus) {
+    setStatusFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(status)) next.delete(status);
+      else next.add(status);
+      return next;
+    });
+  }
+
   const modalContact = contacts.find((c) => c.id === modalContactId) ?? null;
   const hiddenCount = contacts.filter((c) => !c.email).length;
-  const visibleContacts = contacts.filter((c) => showNoEmail || c.email);
+  const visibleContacts = contacts.filter((c) => (showNoEmail || c.email) && statusFilter.has(c.status));
 
   return (
     <div className="space-y-6">
@@ -168,6 +195,27 @@ export function PipelineClient({ initialContacts }: { initialContacts: ContactVi
         </button>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-slate-500">Status:</span>
+        {CONTACT_STATUSES.map((s) => {
+          const active = statusFilter.has(s);
+          return (
+            <button
+              key={s}
+              onClick={() => toggleStatusFilter(s)}
+              className={clsx(
+                "rounded-full border px-2.5 py-1 text-xs font-medium",
+                active
+                  ? "border-slate-900 bg-slate-900 text-white"
+                  : "border-slate-300 bg-white text-slate-500 hover:bg-slate-50",
+              )}
+            >
+              {CONTACT_STATUS_LABELS[s]}
+            </button>
+          );
+        })}
+      </div>
+
       {message && <div className="rounded-md bg-rose-50 px-4 py-2 text-sm text-rose-800">{message}</div>}
 
       <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
@@ -176,6 +224,7 @@ export function PipelineClient({ initialContacts }: { initialContacts: ContactVi
             <tr>
               <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Name</th>
               <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Company</th>
+              <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Job</th>
               <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
               <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Actions</th>
               <th className="px-4 py-2"></th>
@@ -186,9 +235,30 @@ export function PipelineClient({ initialContacts }: { initialContacts: ContactVi
               <tr key={c.id}>
                 <td className="px-4 py-3">
                   <p className="font-medium text-slate-900">{c.fullName}</p>
-                  <p className="text-xs text-slate-500">{c.title ?? "—"}</p>
+                  {editingTitleId === c.id ? (
+                    <input
+                      autoFocus
+                      value={titleDraft}
+                      onChange={(e) => setTitleDraft(e.target.value)}
+                      onBlur={() => saveTitle(c.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveTitle(c.id);
+                        if (e.key === "Escape") setEditingTitleId(null);
+                      }}
+                      className="mt-0.5 w-full rounded border border-slate-300 px-1.5 py-0.5 text-xs text-slate-700"
+                    />
+                  ) : (
+                    <button
+                      onClick={() => startEditTitle(c)}
+                      title="Click to edit"
+                      className="mt-0.5 text-left text-xs text-slate-500 hover:text-slate-700 hover:underline"
+                    >
+                      {c.title ?? "Add title"}
+                    </button>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-slate-700">{c.companyName}</td>
+                <td className="px-4 py-3 text-slate-700">{c.job ?? "—"}</td>
                 <td className="px-4 py-3">
                   <select
                     value={c.status}
@@ -240,10 +310,10 @@ export function PipelineClient({ initialContacts }: { initialContacts: ContactVi
             ))}
             {visibleContacts.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-xs text-slate-400">
+                <td colSpan={6} className="px-4 py-6 text-center text-xs text-slate-400">
                   {contacts.length === 0
                     ? "Nothing here yet."
-                    : "No contacts with an email on file. Toggle the filter above to see the rest."}
+                    : "No contacts match the current filters. Adjust the status or email filter above to see the rest."}
                 </td>
               </tr>
             )}

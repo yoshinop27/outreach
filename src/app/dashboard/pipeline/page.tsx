@@ -18,6 +18,7 @@ export default async function PipelinePage() {
     fullName: c.fullName,
     title: c.title,
     companyName: c.companyName,
+    job: c.job,
     email: c.email,
     emailStatus: c.emailStatus,
     linkedinUrl: c.linkedinUrl,

@@ -26,6 +26,9 @@ model User {
   googleScope             String?
   dailySendCapCurrent     Int       @default(20)
   apolloApiKey            String?
+  resumeName              String? // e.g. "resume.pdf" — sent as a Gmail attachment on every outreach email
+  resumeMimeType          String?
+  resumeData              Bytes?
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
   lastLoginAt             DateTime?
@@ -43,6 +46,7 @@ model WatchlistItem {
   targetTitles  String // JSON string[]
   location      String?
   seniority     String? // JSON string[]
+  job           String? // the specific role/posting being referenced in outreach for this company — {{job}} in templates
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -57,6 +61,7 @@ model Contact {
   fullName           String
   title              String?
   companyName        String
+  job                String? // copied from the watchlist item at discovery time — see WatchlistItem.job
   linkedinUrl        String?
   email              String?
   emailStatus        String   @default("not_found") // verified | guessed | not_found
@@ -73,16 +78,17 @@ model Contact {
 }
 
 model Template {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  channel   String // email | linkedin
-  name      String
-  subject   String?
-  body      String
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  userId             String
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel            String // email | linkedin
+  name               String
+  companyName        String? // null = default/fallback template for the channel; set = only used for that company
+  subject            String?
+  body               String
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   outreachEvents OutreachEvent[]
   

@@ -25,6 +25,7 @@ const createSchema = z.object({
   targetTitles: z.array(z.string()).default([]),
   location: z.string().optional().nullable(),
   seniority: z.array(z.string()).default([]),
+  job: z.string().optional().nullable(),
 });
 
 export async function POST(req: Request) {
@@ -39,6 +40,7 @@ export async function POST(req: Request) {
         targetTitles: serializeStringArray(body.targetTitles),
         location: body.location,
         seniority: serializeStringArray(body.seniority),
+        job: body.job,
       },
     });
     return NextResponse.json({ item }, { status: 201 });

@@ -40,7 +40,12 @@ export async function getAnalytics(userId: string, days: number): Promise<Analyt
     }),
     prisma.template.findMany({
       where: { userId },
-      include: { outreachEvents: { select: { repliedAt: true, sentAt: true, manualActionCompletedAt: true } } },
+      select: {
+        id: true,
+        name: true,
+        channel: true,
+        outreachEvents: { select: { repliedAt: true, sentAt: true, manualActionCompletedAt: true } },
+      },
     }),
   ]);
 

@@ -31,6 +31,54 @@ function encodeEmailBody(raw: string): string {
     .replace(/=+$/, "");
 }
 
+// RFC 2045 caps encoded-body lines at 76 chars — Gmail's own send tools wrap
+// there too, and some MIME parsers choke on unbroken base64 for large parts.
+function wrapBase64(data: string): string {
+  return data.replace(/.{76}/g, "$&\r\n");
+}
+
+export interface EmailAttachment {
+  filename: string;
+  mimeType: string;
+  data: Buffer;
+}
+
+function buildRawEmail(params: {
+  fromUserEmail: string;
+  to: string;
+  subject: string;
+  body: string;
+  attachment?: EmailAttachment | null;
+}): string {
+  const { fromUserEmail, to, subject, body, attachment } = params;
+  const headers = [`From: ${fromUserEmail}`, `To: ${to}`, `Subject: ${subject}`, "MIME-Version: 1.0"];
+
+  if (!attachment) {
+    return [...headers, "Content-Type: text/plain; charset=UTF-8", "", body].join("\r\n");
+  }
+
+  const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const safeFilename = attachment.filename.replace(/"/g, "");
+  return [
+    ...headers,
+    `Content-Type: multipart/mixed; boundary="${boundary}"`,
+    "",
+    `--${boundary}`,
+    "Content-Type: text/plain; charset=UTF-8",
+    "",
+    body,
+    "",
+    `--${boundary}`,
+    `Content-Type: ${attachment.mimeType}; name="${safeFilename}"`,
+    `Content-Disposition: attachment; filename="${safeFilename}"`,
+    "Content-Transfer-Encoding: base64",
+    "",
+    wrapBase64(attachment.data.toString("base64")),
+    "",
+    `--${boundary}--`,
+  ].join("\r\n");
+}
+
 function parseGoogleErrorStatus(err: unknown): number | undefined {
   if (typeof err !== "object" || !err) return undefined;
   const maybeErr = err as {
@@ -146,19 +194,12 @@ export async function mockSendEmail(params: {
   to: string;
   subject: string;
   body: string;
+  attachment?: EmailAttachment | null;
 }): Promise<MockSendEmailResult> {
   const { oauth2, user } = await getGoogleClientForUser({ userId: params.userId, fromUserEmail: params.fromUserEmail });
   const gmail = google.gmail({ version: "v1", auth: oauth2 });
 
-  const rawMessage = [
-    `From: ${params.fromUserEmail}`,
-    `To: ${params.to}`,
-    `Subject: ${params.subject}`,
-    "Content-Type: text/plain; charset=UTF-8",
-    "MIME-Version: 1.0",
-    "",
-    params.body,
-  ].join("\r\n");
+  const rawMessage = buildRawEmail(params);
 
   let threadId: string | null = null;
   try {
