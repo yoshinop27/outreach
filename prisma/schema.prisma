@@ -139,6 +139,7 @@ model SponsorProspect {
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   companyName   String
   companyEmail  String? // where the sponsorship ask is actually sent
+  websiteUrl    String?
   address       String?
   itemRequested String?
   status        String    @default("not_contacted") // not_contacted | sent | follow_up | confirmed | declined

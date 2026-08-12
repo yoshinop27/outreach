@@ -21,6 +21,7 @@ export async function GET() {
 const createSchema = z.object({
   companyName: z.string().min(1),
   companyEmail: z.string().optional().nullable(),
+  websiteUrl: z.string().optional().nullable(),
   address: z.string().optional().nullable(),
   itemRequested: z.string().optional().nullable(),
   status: z.enum(SPONSOR_STATUSES).default("not_contacted"),
@@ -35,6 +36,7 @@ export async function POST(req: Request) {
         userId: user.id,
         companyName: body.companyName,
         companyEmail: body.companyEmail ?? null,
+        websiteUrl: body.websiteUrl ?? null,
         address: body.address ?? null,
         itemRequested: body.itemRequested ?? null,
         status: body.status,

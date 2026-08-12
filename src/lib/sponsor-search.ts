@@ -46,11 +46,14 @@ function domainFromUrl(url: string): string | null {
 
 async function findContact(companyName: string, domain: string) {
   try {
+    // count is how many candidates Apollo searches, not how many we keep —
+    // ask for more than 1 so a candidate without an email on file doesn't
+    // blank out the whole company when a different titled contact would work.
     const contacts = await discoverContacts({
       companyName,
       companyDomain: domain,
       targetTitles: SPONSORSHIP_CONTACT_TITLES,
-      count: 1,
+      count: 10,
     });
     return contacts.find((person) => person.email) ?? null;
   } catch {

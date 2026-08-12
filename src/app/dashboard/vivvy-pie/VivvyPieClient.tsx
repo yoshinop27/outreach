@@ -12,7 +12,7 @@ import {
   SPONSOR_STATUSES,
   type SponsorStatus,
 } from "@/lib/types";
-import { SponsorChat } from "./SponsorChat";
+import { SponsorChat, type AddCompanyInput } from "./SponsorChat";
 
 function TrashIcon() {
   return (
@@ -37,6 +37,7 @@ interface ProspectView {
   id: string;
   companyName: string;
   companyEmail: string | null;
+  websiteUrl: string | null;
   address: string | null;
   itemRequested: string | null;
   status: SponsorStatus;
@@ -53,13 +54,8 @@ interface TemplateView {
 
 const SAMPLE_CONTEXT = { company: "Acme Athletics" };
 
-const emptyProspectForm = { companyName: "", companyEmail: "", address: "", itemRequested: "" };
+const emptyProspectForm = { companyName: "", companyEmail: "", websiteUrl: "", address: "", itemRequested: "" };
 const emptyTemplateForm = { name: "", subject: "", body: "" };
-
-function formatDate(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString();
-}
 
 export function VivvyPieClient({
   initialProspects,
@@ -97,6 +93,7 @@ export function VivvyPieClient({
         body: JSON.stringify({
           companyName,
           companyEmail: extra?.companyEmail || null,
+          websiteUrl: extra?.websiteUrl || null,
           address: extra?.address || null,
           itemRequested: extra?.itemRequested || null,
         }),
@@ -122,6 +119,7 @@ export function VivvyPieClient({
     setEditProspectForm({
       companyName: p.companyName,
       companyEmail: p.companyEmail ?? "",
+      websiteUrl: p.websiteUrl ?? "",
       address: p.address ?? "",
       itemRequested: p.itemRequested ?? "",
     });
@@ -136,6 +134,7 @@ export function VivvyPieClient({
         body: JSON.stringify({
           companyName: editProspectForm.companyName,
           companyEmail: editProspectForm.companyEmail || null,
+          websiteUrl: editProspectForm.websiteUrl || null,
           address: editProspectForm.address || null,
           itemRequested: editProspectForm.itemRequested || null,
         }),
@@ -261,8 +260,12 @@ export function VivvyPieClient({
       )}
 
       <SponsorChat
-        onAddCompany={(companyName, companyEmail, address) =>
-          addProspect(companyName, { companyEmail: companyEmail ?? "", address: address ?? "" })
+        onAddCompany={(company: AddCompanyInput) =>
+          addProspect(company.companyName, {
+            companyEmail: company.companyEmail ?? "",
+            websiteUrl: company.websiteUrl ?? "",
+            address: company.address ?? "",
+          })
         }
       />
 
@@ -300,6 +303,12 @@ export function VivvyPieClient({
               className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
             />
             <input
+              placeholder="Website"
+              value={prospectForm.websiteUrl}
+              onChange={(e) => setProspectForm({ ...prospectForm, websiteUrl: e.target.value })}
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+            <input
               placeholder="Address"
               value={prospectForm.address}
               onChange={(e) => setProspectForm({ ...prospectForm, address: e.target.value })}
@@ -330,7 +339,7 @@ export function VivvyPieClient({
                 <th className="px-4 py-2 font-medium">Address</th>
                 <th className="px-4 py-2 font-medium">Item requested</th>
                 <th className="px-4 py-2 font-medium">Status</th>
-                <th className="px-4 py-2 font-medium">Date sent</th>
+                <th className="px-4 py-2 font-medium">Site</th>
                 <th className="px-4 py-2 font-medium">Actions</th>
                 <th className="px-4 py-2"></th>
               </tr>
@@ -368,7 +377,14 @@ export function VivvyPieClient({
                       />
                     </td>
                     <td className="px-4 py-2 text-slate-400">{SPONSOR_STATUS_LABELS[p.status]}</td>
-                    <td className="px-4 py-2 text-slate-400">{formatDate(p.dateSent)}</td>
+                    <td className="px-4 py-2">
+                      <input
+                        placeholder="Website"
+                        value={editProspectForm.websiteUrl}
+                        onChange={(e) => setEditProspectForm({ ...editProspectForm, websiteUrl: e.target.value })}
+                        className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                      />
+                    </td>
                     <td className="px-4 py-2">
                       <div className="flex gap-2">
                         <button
@@ -411,7 +427,20 @@ export function VivvyPieClient({
                         ))}
                       </select>
                     </td>
-                    <td className="px-4 py-2 text-slate-600">{formatDate(p.dateSent)}</td>
+                    <td className="px-4 py-2">
+                      {p.websiteUrl ? (
+                        <a
+                          href={p.websiteUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-sky-600 hover:underline"
+                        >
+                          Site
+                        </a>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2">
                       <div className="flex flex-wrap items-center gap-3">
                         {p.companyEmail && (

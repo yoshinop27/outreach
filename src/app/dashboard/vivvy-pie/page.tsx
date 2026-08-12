@@ -20,6 +20,7 @@ export default async function VivvyPiePage() {
     id: p.id,
     companyName: p.companyName,
     companyEmail: p.companyEmail,
+    websiteUrl: p.websiteUrl,
     address: p.address,
     itemRequested: p.itemRequested,
     status: p.status as SponsorStatus,

@@ -8,6 +8,7 @@ import { SPONSOR_STATUSES } from "@/lib/types";
 const updateSchema = z.object({
   companyName: z.string().min(1).optional(),
   companyEmail: z.string().optional().nullable(),
+  websiteUrl: z.string().optional().nullable(),
   address: z.string().optional().nullable(),
   itemRequested: z.string().optional().nullable(),
   status: z.enum(SPONSOR_STATUSES).optional(),

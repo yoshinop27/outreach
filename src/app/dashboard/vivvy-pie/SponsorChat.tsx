@@ -5,11 +5,14 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import type { SponsorSearchUIMessage } from "@/lib/agents/sponsor-search-agent";
 
-export function SponsorChat({
-  onAddCompany,
-}: {
-  onAddCompany: (companyName: string, companyEmail: string | null, address: string | null) => void;
-}) {
+export interface AddCompanyInput {
+  companyName: string;
+  companyEmail: string | null;
+  address: string | null;
+  websiteUrl: string | null;
+}
+
+export function SponsorChat({ onAddCompany }: { onAddCompany: (company: AddCompanyInput) => void }) {
   const [input, setInput] = useState("");
   const { messages, sendMessage, status } = useChat<SponsorSearchUIMessage>({
     transport: new DefaultChatTransport({ api: "/api/vivvy-pie/chat" }),
@@ -89,7 +92,14 @@ export function SponsorChat({
                             )}
                           </div>
                           <button
-                            onClick={() => onAddCompany(c.name, c.email, c.address)}
+                            onClick={() =>
+                              onAddCompany({
+                                companyName: c.name,
+                                companyEmail: c.email,
+                                address: c.address,
+                                websiteUrl: c.websiteUrl,
+                              })
+                            }
                             className="flex-shrink-0 rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
                           >
                             Add to my list
