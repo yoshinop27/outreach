@@ -34,8 +34,10 @@ model User {
   updatedAt               DateTime  @updatedAt
   lastLoginAt             DateTime?
 
-  watchlistItems WatchlistItem[]
-  templates      Template[]
+  watchlistItems   WatchlistItem[]
+  templates        Template[]
+  sponsorProspects SponsorProspect[]
+  sponsorTemplates SponsorTemplate[]
 }
 
 model WatchlistItem {
@@ -126,4 +128,37 @@ model CoffeeChat {
   createdAt       DateTime @default(now())
 
   @@index([contactId])
+}
+
+// Vivvy Pie — sponsorship outreach panel, separate from the job-search
+// Watchlist/Contact/Template flow above but following the same per-user
+// ownership pattern.
+model SponsorProspect {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName   String
+  companyEmail  String? // where the sponsorship ask is actually sent
+  address       String?
+  itemRequested String?
+  status        String    @default("not_contacted") // not_contacted | sent | follow_up | confirmed | declined
+  dateSent      DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+model SponsorTemplate {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  subject   String?
+  body      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }

@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/inbox", label: "Reply Inbox" },
   { href: "/dashboard/templates", label: "Templates" },
   { href: "/dashboard/calendar", label: "Calendar" },
+  { href: "/dashboard/vivvy-pie", label: "Vivvy Pie" },
 ];
 
 export function Sidebar({

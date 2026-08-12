@@ -32,6 +32,25 @@ export const CONTACT_STATUS_LABELS: Record<ContactStatus, string> = {
   ignored: "Ignored",
 };
 
+export const SPONSOR_STATUSES = ["not_contacted", "sent", "follow_up", "confirmed", "declined"] as const;
+export type SponsorStatus = (typeof SPONSOR_STATUSES)[number];
+
+export const SPONSOR_STATUS_LABELS: Record<SponsorStatus, string> = {
+  not_contacted: "Not Contacted",
+  sent: "Sent",
+  follow_up: "Follow-up",
+  confirmed: "Confirmed",
+  declined: "Declined",
+};
+
+export const SPONSOR_STATUS_COLORS: Record<SponsorStatus, string> = {
+  not_contacted: "bg-slate-100 text-slate-700",
+  sent: "bg-blue-100 text-blue-700",
+  follow_up: "bg-amber-100 text-amber-700",
+  confirmed: "bg-emerald-100 text-emerald-700",
+  declined: "bg-rose-100 text-rose-700",
+};
+
 export function parseStringArray(value: string | null | undefined): string[] {
   if (!value) return [];
   try {
@@ -66,8 +85,14 @@ export interface TemplateVariableContext {
   sender_name: string;
 }
 
-export function renderTemplate(template: string, ctx: TemplateVariableContext): string {
+export const SPONSOR_TEMPLATE_VARIABLES = ["company"] as const;
+
+export interface SponsorTemplateVariableContext {
+  company: string;
+}
+
+export function renderTemplate(template: string, ctx: Record<string, string>): string {
   return template.replace(/{{\s*(\w+)\s*}}/g, (match, key: string) => {
-    return key in ctx ? ctx[key as keyof TemplateVariableContext] : match;
+    return key in ctx ? ctx[key] : match;
   });
 }

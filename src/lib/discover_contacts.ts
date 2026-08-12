@@ -9,7 +9,7 @@ import type { SearchApi } from "@/apollo-client/apis/SearchApi";
 // surface Apollo's own error message instead of a generic 500.
 export class ApolloApiError extends Error {}
 
-async function callApollo<T>(fn: () => Promise<T>): Promise<T> {
+export async function callApollo<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
   } catch (err) {
@@ -46,7 +46,7 @@ interface SearchCandidate extends DiscoveredContact {
 // Apollo's bulk enrichment endpoint accepts at most 10 people per call.
 const BULK_ENRICHMENT_BATCH_SIZE = 10;
 
-function chunk<T>(arr: T[], size: number): T[][] {
+export function chunk<T>(arr: T[], size: number): T[][] {
   const chunks: T[][] = [];
   for (let i = 0; i < arr.length; i += size) {
     chunks.push(arr.slice(i, i + size));
