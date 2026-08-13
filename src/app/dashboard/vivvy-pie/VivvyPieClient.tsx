@@ -6,6 +6,7 @@ import { apiFetch } from "@/lib/fetcher";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import {
   renderTemplate,
+  reflowParagraphs,
   SPONSOR_TEMPLATE_VARIABLES,
   SPONSOR_STATUS_LABELS,
   SPONSOR_STATUS_COLORS,
@@ -13,6 +14,20 @@ import {
   type SponsorStatus,
 } from "@/lib/types";
 import { SponsorChat, type AddCompanyInput } from "./SponsorChat";
+
+// Textareas normally lose focus on Tab — intercept it so Tab inserts an
+// actual tab character at the cursor instead, letting the body be indented
+// like the email it's drafting.
+function insertTabAtCursor(e: React.KeyboardEvent<HTMLTextAreaElement>, onChange: (next: string) => void) {
+  if (e.key !== "Tab" || e.shiftKey) return;
+  e.preventDefault();
+  const el = e.currentTarget;
+  const { selectionStart, selectionEnd, value } = el;
+  onChange(value.slice(0, selectionStart) + "\t" + value.slice(selectionEnd));
+  requestAnimationFrame(() => {
+    el.selectionStart = el.selectionEnd = selectionStart + 1;
+  });
+}
 
 function TrashIcon() {
   return (
@@ -519,6 +534,7 @@ export function VivvyPieClient({
               placeholder="Body — use {{company}}"
               value={templateForm.body}
               onChange={(e) => setTemplateForm({ ...templateForm, body: e.target.value })}
+              onKeyDown={(e) => insertTabAtCursor(e, (body) => setTemplateForm({ ...templateForm, body }))}
               className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
             />
             <p className="text-xs text-slate-400">
@@ -556,6 +572,7 @@ export function VivvyPieClient({
                   rows={6}
                   value={editTemplateForm.body}
                   onChange={(e) => setEditTemplateForm({ ...editTemplateForm, body: e.target.value })}
+                  onKeyDown={(e) => insertTabAtCursor(e, (body) => setEditTemplateForm({ ...editTemplateForm, body }))}
                   className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
                 />
                 <div className="flex gap-3">
@@ -607,7 +624,7 @@ export function VivvyPieClient({
                 {previewId === t.id && (
                   <div className="mt-3 whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-sm text-slate-700">
                     {t.subject && <p className="mb-2 font-medium">{renderTemplate(t.subject, SAMPLE_CONTEXT)}</p>}
-                    {renderTemplate(t.body, SAMPLE_CONTEXT)}
+                    {reflowParagraphs(renderTemplate(t.body, SAMPLE_CONTEXT))}
                   </div>
                 )}
               </div>

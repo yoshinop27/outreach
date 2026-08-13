@@ -5,7 +5,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { mockSendEmail } from "@/lib/mock-google";
-import { renderTemplate } from "@/lib/types";
+import { renderTemplate, reflowParagraphs } from "@/lib/types";
 import { NotFoundError, BadRequestError } from "@/lib/api-helpers";
 
 export async function sendEmailToSponsorProspect(prospectId: string, userId: string) {
@@ -23,7 +23,7 @@ export async function sendEmailToSponsorProspect(prospectId: string, userId: str
 
   const ctx = { company: prospect.companyName };
   const subject = renderTemplate(template.subject ?? "", ctx);
-  const body = renderTemplate(template.body, ctx);
+  const body = reflowParagraphs(renderTemplate(template.body, ctx));
   const result = await mockSendEmail({
     userId: user.id,
     fromUserEmail: user.email,

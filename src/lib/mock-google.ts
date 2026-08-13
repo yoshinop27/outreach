@@ -43,6 +43,14 @@ export interface EmailAttachment {
   data: Buffer;
 }
 
+// join() only inserts CRLF *between* array elements — a multi-line body
+// string is one element, so its own paragraph breaks stay bare LF unless
+// normalized here first. RFC 5322 requires CRLF throughout, and mixing the
+// two is what makes some mail clients render broken/collapsed paragraphs.
+function normalizeLineEndings(text: string): string {
+  return text.replace(/\r\n/g, "\n").replace(/\n/g, "\r\n");
+}
+
 function buildRawEmail(params: {
   fromUserEmail: string;
   to: string;
@@ -52,9 +60,10 @@ function buildRawEmail(params: {
 }): string {
   const { fromUserEmail, to, subject, body, attachment } = params;
   const headers = [`From: ${fromUserEmail}`, `To: ${to}`, `Subject: ${subject}`, "MIME-Version: 1.0"];
+  const normalizedBody = normalizeLineEndings(body);
 
   if (!attachment) {
-    return [...headers, "Content-Type: text/plain; charset=UTF-8", "", body].join("\r\n");
+    return [...headers, "Content-Type: text/plain; charset=UTF-8", "", normalizedBody].join("\r\n");
   }
 
   const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).slice(2)}`;
@@ -66,7 +75,7 @@ function buildRawEmail(params: {
     `--${boundary}`,
     "Content-Type: text/plain; charset=UTF-8",
     "",
-    body,
+    normalizedBody,
     "",
     `--${boundary}`,
     `Content-Type: ${attachment.mimeType}; name="${safeFilename}"`,
