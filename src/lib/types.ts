@@ -97,39 +97,18 @@ export function renderTemplate(template: string, ctx: Record<string, string>): s
   });
 }
 
-// Traditional plain-text wrap width (matches `git log` body wrapping, `fmt`'s
-// default) — comfortably under the ~78-char line SHOULD-limit in RFC 5322.
-const PLAIN_TEXT_WRAP_WIDTH = 72;
-
-function wrapParagraph(paragraph: string, width: number): string {
-  const words = paragraph.split(" ").filter(Boolean);
-  const lines: string[] = [];
-  let line = "";
-  for (const word of words) {
-    if (line && line.length + 1 + word.length > width) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = line ? `${line} ${word}` : word;
-    }
-  }
-  if (line) lines.push(line);
-  return lines.join("\n");
-}
-
 // A template body can arrive with a real line break after every wrapped
-// line (pasted from Word/Docs/a PDF) or with none at all (typed straight
-// through, relying on the textarea's own visual wrap, which produces one
-// very long line with no break in the stored value). Either shape sends
-// badly as plain text: the first shreds one paragraph into choppy
-// fragments, and the second leaves a line long enough that mail transport
-// ends up folding it at arbitrary points instead of a word boundary. A
-// blank line is the only reliable paragraph marker a plain <textarea>
-// gives us, so collapse everything else back to spaces and then do our
-// own clean, word-boundary wrap rather than leaving line length to chance.
-export function reflowParagraphs(text: string, width = PLAIN_TEXT_WRAP_WIDTH): string {
+// line — pasted from Word/Docs/a PDF, which hard-wraps at whatever width
+// that source used. Sent as plain text verbatim, that shreds one paragraph
+// into a dozen fragments no matter what width a mail client renders it at.
+// A blank line is the only reliable paragraph marker a plain <textarea>
+// gives us, so treat that as the real break and collapse everything else
+// back to spaces — leaving each paragraph as a single logical line so the
+// recipient's own client reflows it to its own width, rather than us
+// baking in a fixed wrap column that just becomes a new set of fragments.
+export function reflowParagraphs(text: string): string {
   return text
     .split(/\n{2,}/)
-    .map((paragraph) => wrapParagraph(paragraph.replace(/\s*\n\s*/g, " ").trim(), width))
+    .map((paragraph) => paragraph.replace(/\s*\n\s*/g, " ").trim())
     .join("\n\n");
 }
